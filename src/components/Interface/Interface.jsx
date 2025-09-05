@@ -1,21 +1,32 @@
 // src/components/Interface/Interface.jsx
 import React from "react";
 import { modelsConfig } from "../../modelsConfig";
-import { DoorPresetWidget } from "../Interface/widgets/DoorPresetWidget";
+import { DoorPresetWidget } from "./widgets/DoorPresetWidget";
+import { TextureWidget } from "./widgets/TextureWidget";
 
-export function Interface({ selectedModel, togglePart, api }) {
+export function Interface({ selectedModel, togglePart, api, applyRequest }) {
   if (!selectedModel) return null;
 
   const config = modelsConfig[selectedModel];
   if (!config) return null;
 
+  // --- Widget renderer ---
   const renderWidget = (widget) => {
     switch (widget.type) {
       case "doorPresets":
         return <DoorPresetWidget key="doorPresets" config={config} api={api} />;
+
       case "doorToggles":
         return (
-          <div key="doorToggles" style={{ background: "#fff", padding: 8, borderRadius: 6, marginBottom: 8 }}>
+          <div
+            key="doorToggles"
+            style={{
+              background: "#fff",
+              padding: 8,
+              borderRadius: 6,
+              marginBottom: 8,
+            }}
+          >
             <div style={{ marginBottom: 6 }}>Doors</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {(config.interactionGroups || [])
@@ -39,9 +50,18 @@ export function Interface({ selectedModel, togglePart, api }) {
             </div>
           </div>
         );
+
       case "drawerToggles":
         return (
-          <div key="drawerToggles" style={{ background: "#fff", padding: 8, borderRadius: 6, marginBottom: 8 }}>
+          <div
+            key="drawerToggles"
+            style={{
+              background: "#fff",
+              padding: 8,
+              borderRadius: 6,
+              marginBottom: 8,
+            }}
+          >
             <div style={{ marginBottom: 6 }}>Drawers</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {(config.interactionGroups || [])
@@ -65,13 +85,32 @@ export function Interface({ selectedModel, togglePart, api }) {
             </div>
           </div>
         );
+
+      case "textureWidget":
+        return (
+          <TextureWidget
+            key="textureWidget"
+            api={api}
+            config={config}
+            applyRequest={applyRequest} // ✅ use the prop here
+          />
+        );
+
       default:
         return null;
     }
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", padding: 8 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        width: "100%",
+        padding: 8,
+      }}
+    >
       {(config.uiWidgets || []).map(renderWidget)}
     </div>
   );
