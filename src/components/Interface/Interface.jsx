@@ -3,6 +3,7 @@ import React from "react";
 import { modelsConfig } from "../../modelsConfig";
 import { DoorPresetWidget } from "./widgets/DoorPresetWidget";
 import { TextureWidget } from "./widgets/TextureWidget";
+import { LightWidget } from "./widgets/LightWidget"; // ✅ Import LightWidget
 
 export function Interface({ selectedModel, togglePart, api, applyRequest }) {
   if (!selectedModel) return null;
@@ -92,7 +93,16 @@ export function Interface({ selectedModel, togglePart, api, applyRequest }) {
             key="textureWidget"
             api={api}
             config={config}
-            applyRequest={applyRequest} // ✅ use the prop here
+            applyRequest={applyRequest}
+          />
+        );
+
+      case "lightWidget": // ✅ Add light widget case
+        return (
+          <LightWidget
+            key="lightWidget"
+            config={config}
+            api={api}
           />
         );
 

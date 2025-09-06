@@ -89,53 +89,82 @@ export const modelsConfig = {
       { type: "doorPresets", title: "Door Presets" },
       { type: "doorToggles", title: "Door Toggles" },
       { type: "drawerToggles", title: "Drawers" },
-     
     ],
   },
 
   Visicooler: {
     path: "/models/Visicooler.glb",
     hideDoorsByDefault: false,
+    // ✅ Add lights configuration at the root level (not inside uiWidgets)
+    lights: [
+      { 
+        name: "Point", 
+        defaultState: "on",
+        intensity: 9.0
+      },
+      
+    ],
     interactionGroups: [
       { type:"doors", label:"Door", parts:[{ name:"Door", rotationAxis:"y", openAngle:90 }] },
       { type:"toggles", label:"Lights", parts:[{ name:"Light1001", label:"LED Light" }] },
     ],
     uiWidgets: [
       { type:"doorToggles", title:"Door Toggles" },
+      { type: "lightWidget", title: "Light Control" }, // ✅ Just reference the widget type
       {
         type: "textureWidget",
         title: "Textures",
         options: {
-    parts: [
-        {
-          name: "canopy",
-          
-        },
-        {
-          name: "SidePannel1",
-          mapping: {
-             flipY: false,
+          parts: [
+            {
+              name: "canopy",
+               mapping: {
+    
+    offset: { x: 0, y: -0.25 },
+    center: { x: 0.5, y:-0.05 },
+    flipY: false, 
+    repeat: { x: 1, y: 1.9 },
+    wrapS: "ClampToEdgeWrapping",
+    wrapT: "ClampToEdgeWrapping"
+  }
+            },
+            {
+              name: "SidePannel1",
+              mapping: {
+                flipY: false,
                 offset: { x: -0.25, y: 0 },
                 center: { x: 0.5, y: 0.5 },
                 rotation: Math.PI,
                 repeat: { x: 3.2, y: 0.9 },
                 wrapS: "ClampToEdgeWrapping",
                 wrapT: "ClampToEdgeWrapping"
-          }
-        },
-        {
-          name: "SidePannel2",
-          mapping: {
-            flipY: false,
+              }
+            },
+            {
+              name: "SidePannel2",
+              mapping: {
+                flipY: false,
                 offset: { x: -0.25, y: 0 },
                 center: { x: 0.5, y: 0.5 },
                 rotation: Math.PI,
                 repeat: { x: 3.2, y: 0.9 },
                 wrapS: "ClampToEdgeWrapping",
                 wrapT: "ClampToEdgeWrapping"
-          }
-        }
-      ],     
+              }
+            },
+            {
+              name: "Louver",
+              mapping: {
+                flipY: false,
+                offset: { x: -0.25, y: 0 },
+                center: { x: 0.5, y: 0.5 },
+                rotation: Math.PI,
+                repeat: { x: 3.2, y: 0.9 },
+                wrapS: "ClampToEdgeWrapping",
+                wrapT: "ClampToEdgeWrapping"
+              }
+            }
+          ],     
           textures: [
             { name:"canopy", path:"/texture/pepsicanopy.jpg" },
             { name:"Glass Clear", path:"/textures/clear_glass.jpg" },
@@ -149,40 +178,48 @@ export const modelsConfig = {
   DeepFridge: {
     path: "/models/DeepFridge.glb",
     hideDoorsByDefault: false,
+    // ✅ Add lights configuration
+    lights: [
+      { 
+        name: "FridgeLight", 
+        defaultState: "off",
+        intensity: 1.0
+      }
+    ],
     interactionGroups: [
       { type:"doors", label:"Doors", parts:[{ name:"Door1", rotationAxis:"x", openAngle:-90 },{ name:"Door2", rotationAxis:"x", openAngle:-90 }] },
-      { type:"toggles", label:"Lights", parts:[{ name:"PointLight", label:"Interior Light" }] },
+      { type:"toggles", label:"Lights", parts:[{ name:"Point", label:"Interior Light" }] },
     ],
     uiWidgets: [
       { type:"doorToggles", title:"Door Toggles" },
+      { type: "lightWidget", title: "Light Control" }, // ✅ Add light widget
       {
         type: "textureWidget",
         title: "Textures",
         options: {
           parts: [
-        {
-         name: "FrontPannel",
-          mapping: {
-            repeat: { x: 1, y: 1 },
-            flipY: false,
-          }
-        },
-        {
-          name: "SidePannelRight",
-          
-          mapping: {
-            repeat: { x: 1, y: 1 },
-            flipY: false,
-          }
-        },
-        {
-          name: "SidePannelLeft",
-          mapping: {
-            repeat: { x: 1, y: 1 },
-            flipY: false,
-          }
-        }
-      ],
+            {
+              name: "FrontPannel",
+              mapping: {
+                repeat: { x: 1, y: 1 },
+                flipY: false,
+              }
+            },
+            {
+              name: "SidePannelRight",
+              mapping: {
+                repeat: { x: 1, y: 1 },
+                flipY: false,
+              }
+            },
+            {
+              name: "SidePannelLeft",
+              mapping: {
+                repeat: { x: 1, y: 1 },
+                flipY: false,
+              }
+            }
+          ],
           textures: [
             { name:"Glass Frosted", path:"/textures/frosted_glass.jpg" },
             { name:"Glass Clear", path:"/textures/clear_glass.jpg" },
@@ -197,13 +234,15 @@ export const modelsConfig = {
     path: "/models/New.glb",
     hideDoorsByDefault: false,
     hiddenInitially: [],
+    // ✅ Empty lights array (no lights in this model)
+    lights: [],
     interactionGroups: [
       { type:"doors", label:"Doors", parts:[{ name:"Door_1", rotationAxis:"y", openAngle:90 },{ name:"Door_2", rotationAxis:"y", openAngle:90 },{ name:"Door_3", rotationAxis:"y", openAngle:90 },{ name:"Door_4", rotationAxis:"y", openAngle:90 }] },
       { type:"drawers", label:"Drawers", parts:[{ name:"TopDrawer", positionAxis:"z", openPosition:0.18 }] },
     ],
     uiWidgets: [
       { type:"doorToggles", title:"Door Toggles" }
-      // ✅ you can add textureWidget here later if needed
+      // No light widget since there are no lights
     ],
     camera: { position:[0,4,11], target:[0,1,0], fov:50 },
   },
