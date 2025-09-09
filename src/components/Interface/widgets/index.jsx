@@ -1,38 +1,19 @@
 import React from 'react';
 import { DoorPresetWidget } from "./DoorPresetWidget";
 import { TextureWidget } from "./TextureWidget";
+import { LightWidget } from "./LightWidget";
+import GlobalTextureWidget from "./GlobalTextureWidget";
 import { DoorControls } from "../controls/DoorControls";
 
-function DoorToggles({ config, api }) {
-  const partsMap = {};
-  (config.interactionGroups || []).forEach((g) => {
-    if (!Array.isArray(g.parts)) return;
-    if (String(g.type || '').toLowerCase().includes('door')) {
-      g.parts.forEach((p) => { partsMap[p.name] = p; });
-    }
-  });
-  if (Object.keys(partsMap).length === 0) return null;
-  return <DoorControls parts={partsMap} onToggle={(name, type) => api?.togglePart?.(name, type)} />;
-}
-
-function DrawerToggles({ config, api }) {
-  const drawers = (config.interactionGroups || []).find(g => String(g.type || '').toLowerCase().includes('drawer'))?.parts || [];
-  if (!drawers.length) return null;
-  return (
-    <div style={{ background: '#fff', padding: 8, borderRadius: 6, marginBottom: 8 }}>
-      <div style={{ marginBottom: 6 }}>Drawers</div>
-      {drawers.map((d) => (
-        <button key={d.name} onClick={() => api?.togglePart?.(d.name, 'drawer')}>Toggle {d.name}</button>
-      ))}
-    </div>
-  );
-}
+// ✅ Toggle widgets removed - using raycasting interactions instead
+// All door/drawer interactions are now handled via raycasting with metadata from modelsConfig
 
 export const widgetRegistry = {
   doorPresets: DoorPresetWidget,
-  doorToggles: DoorToggles,
-  drawerToggles: DrawerToggles,
   texture: TextureWidget,
+  textureWidget: TextureWidget,
+  globalTextureWidget: GlobalTextureWidget,
+  lightWidget: LightWidget,
 };
 
 export default widgetRegistry;

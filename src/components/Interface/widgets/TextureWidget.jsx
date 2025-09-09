@@ -1,11 +1,18 @@
 // src/components/widgets/TextureWidget.jsx
 import React, { useState } from "react";
-import { Button, MenuItem, Select, Typography } from "@mui/material";
+import "../Interface.css";
 
 export const TextureWidget = ({ config, applyRequest }) => {
   const widget = config?.uiWidgets?.find((w) => w.type === "textureWidget");
   if (!widget || !widget.options) {
-    return <Typography>No texture options available for this model.</Typography>;
+    return (
+      <div className="widget-container">
+        <div className="widget-title">🎨 Texture Widget</div>
+        <p style={{ textAlign: "center", color: "#6c757d", fontStyle: "italic" }}>
+          No texture options available for this model.
+        </p>
+      </div>
+    );
   }
 
   const { parts = [], textures = [] } = widget.options;
@@ -50,65 +57,64 @@ export const TextureWidget = ({ config, applyRequest }) => {
   };
 
   return (
-    <div style={{ padding: "10px" }}>
-      <Typography variant="h6">{widget.title || "Texture Widget"}</Typography>
+    <div className="widget-container">
+      <div className="widget-title">{widget.title || "🎨 Texture Widget"}</div>
 
       {/* Part Selector */}
-      <Select
-        value={selectedPart}
-        onChange={(e) => setSelectedPart(e.target.value)}
-        displayEmpty
-        fullWidth
-        style={{ marginBottom: "10px" }}
-      >
-        <MenuItem disabled value="">
-          Select Part
-        </MenuItem>
-        {parts.map((part) => (
-          <MenuItem key={part.name} value={part.name}>
-            {part.name}
-          </MenuItem>
-        ))}
-      </Select>
+      <div className="form-group">
+        <label className="form-label">Select Part</label>
+        <select 
+          className="interface-select"
+          value={selectedPart}
+          onChange={(e) => setSelectedPart(e.target.value)}
+        >
+          <option value="" disabled>Select Part</option>
+          {parts.map((part) => (
+            <option key={part.name} value={part.name}>
+              {part.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* Texture Selector */}
-      <Select
-        value={selectedTexture}
-        onChange={(e) => {
-          setSelectedTexture(e.target.value);
-          setUploadedFile(null);
-        }}
-        displayEmpty
-        fullWidth
-        style={{ marginBottom: "10px" }}
-      >
-        <MenuItem disabled value="">
-          Select Texture
-        </MenuItem>
-        {textures.map((tex) => (
-          <MenuItem key={tex.path} value={tex.path}>
-            {tex.name}
-          </MenuItem>
-        ))}
-      </Select>
+      <div className="form-group">
+        <label className="form-label">Select Texture</label>
+        <select 
+          className="interface-select"
+          value={selectedTexture}
+          onChange={(e) => {
+            setSelectedTexture(e.target.value);
+            setUploadedFile(null);
+          }}
+        >
+          <option value="" disabled>Select Texture</option>
+          {textures.map((tex) => (
+            <option key={tex.path} value={tex.path}>
+              {tex.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* Upload custom texture */}
-      <input
-        type="file"
-        accept="image/*"
-        onChange={handleTextureUpload}
-        style={{ marginBottom: "10px" }}
-      />
+      <div className="form-group">
+        <label className="form-label">Upload Custom Texture</label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleTextureUpload}
+          className="form-file-input"
+        />
+      </div>
 
       {/* Apply button */}
-      <Button
-        variant="contained"
-        color="primary"
+      <button
+        className="interface-button btn-full-width"
         onClick={handleApply}
-        fullWidth
       >
         Apply Texture
-      </Button>
+      </button>
     </div>
   );
 };

@@ -1,58 +1,50 @@
-// src/App.jsx
-import React, { useState, useRef } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Experience } from "./components/Experience/Experience.jsx";
-import { Interface } from "./components/Interface/Interface.jsx";
-import { modelsConfig } from "./modelsConfig";
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import { Login } from './components/Auth/Login';
+import AdminLayout from './components/Admin/AdminLayout';
+import MainApp from './components/MainApp/MainApp';
+import './App.css';
 
 function App() {
-  const [selectedModel, setSelectedModel] = useState("Undercounter");
-  const togglePartRef = useRef();
-  const [api, setApi] = useState(null);
+  const { user, loading } = useAuth();
 
-  // 🔗 Shared ref for texture application
-  const applyRequest = useRef(null);
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="spinner"></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
-  const handleSetTogglePart = (togglePartFunction) => {
-    togglePartRef.current = togglePartFunction;
-  };
-
-  const handleToggleClick = (name, type) => {
-    if (togglePartRef.current) togglePartRef.current()(name, type);
-  };
-
-  const handleApiReady = (apiObj) => {
-    setApi(apiObj);
-  };
+  if (!user) {
+    return <Login />;
+  }
 
   return (
-    <div style={{ display: "flex", width: "100vw", height: "100vh", overflow: "hidden" }}>
-      <div style={{ width: "30%", padding: 16, background: "#f8f8f8", overflowY: "auto" }}>
-        <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
-          {Object.keys(modelsConfig).map((key) => (
-            <option key={key} value={key}>{key}</option>
-          ))}
-        </select>
-
-        <Interface
-          selectedModel={selectedModel}
-          togglePart={handleToggleClick}
-          applyDoorSelection={(...args) => api?.applyDoorSelection?.(...args)}
-          api={api}
-          applyRequest={applyRequest} // ✅ Make sure this is passed!
+    <div className="app">
+      <Routes>
+        {/* Admin Routes */}
+        {user.role === 'admin' && (
+          <Route path="/admin/*" element={<AdminLayout />} />
+        )}
+        
+        {/* Main 3D App Routes */}
+        <Route path="/" element={<MainApp />} />
+        <Route path="/app" element={<MainApp />} />
+        
+        {/* Redirect based on role */}
+        <Route 
+          path="*" 
+          element={
+            <Navigate 
+              to={user.role === 'admin' ? '/admin/dashboard' : '/app'} 
+              replace 
+            />
+          } 
         />
-      </div>
-
-      <div style={{ flex: 1 }}>
-        <Canvas shadows camera={{ position: [0, 2, 5], fov: 50 }}>
-          <Experience
-            modelName={selectedModel}
-            onTogglePart={handleSetTogglePart}
-            onApiReady={handleApiReady}
-            applyRequest={applyRequest} // ✅ Make sure this is passed!
-          />
-        </Canvas>
-      </div>
+      </Routes>
     </div>
   );
 }

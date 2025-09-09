@@ -51,6 +51,7 @@ export const modelsConfig = {
       },
     },
 
+    // ✅ RAYCASTING INTERACTION METADATA
     interactionGroups: [
       {
         type: "doors", label: "Solid Doors",
@@ -84,33 +85,36 @@ export const modelsConfig = {
       },
     ],
 
-    // ✅ UI widgets for this model
+    // ✅ UI widgets (toggle widgets removed - using raycasting instead)
     uiWidgets: [
       { type: "doorPresets", title: "Door Presets" },
-      { type: "doorToggles", title: "Door Toggles" },
-      { type: "drawerToggles", title: "Drawers" },
+      { 
+        type: "globalTextureWidget", 
+        title: "Global Texture", 
+        options: { 
+          exclude: ["Cylinder001.003","Node_4365","Cylinder001"] 
+        } 
+      },
     ],
   },
 
   Visicooler: {
     path: "/models/Visicooler.glb",
     hideDoorsByDefault: false,
-    // ✅ Add lights configuration at the root level (not inside uiWidgets)
     lights: [
       { 
         name: "Point", 
         defaultState: "on",
         intensity: 9.0
       },
-      
     ],
+    // ✅ RAYCASTING INTERACTION METADATA
     interactionGroups: [
       { type:"doors", label:"Door", parts:[{ name:"Door", rotationAxis:"y", openAngle:90 }] },
       { type:"toggles", label:"Lights", parts:[{ name:"Light1001", label:"LED Light" }] },
     ],
     uiWidgets: [
-      { type:"doorToggles", title:"Door Toggles" },
-      { type: "lightWidget", title: "Light Control" }, // ✅ Just reference the widget type
+      { type: "lightWidget", title: "Light Control" },
       {
         type: "textureWidget",
         title: "Textures",
@@ -119,14 +123,13 @@ export const modelsConfig = {
             {
               name: "canopy",
                mapping: {
-    
-    offset: { x: 0, y: -0.25 },
-    center: { x: 0.5, y:-0.05 },
-    flipY: false, 
-    repeat: { x: 1, y: 1.9 },
-    wrapS: "ClampToEdgeWrapping",
-    wrapT: "ClampToEdgeWrapping"
-  }
+                offset: { x: 0, y: -0.25 },
+                center: { x: 0.5, y:-0.05 },
+                flipY: false, 
+                repeat: { x: 1, y: 1.9 },
+                wrapS: "ClampToEdgeWrapping",
+                wrapT: "ClampToEdgeWrapping"
+              }
             },
             {
               name: "SidePannel1",
@@ -178,7 +181,6 @@ export const modelsConfig = {
   DeepFridge: {
     path: "/models/DeepFridge.glb",
     hideDoorsByDefault: false,
-    // ✅ Add lights configuration
     lights: [
       { 
         name: "FridgeLight", 
@@ -186,13 +188,13 @@ export const modelsConfig = {
         intensity: 1.0
       }
     ],
+    // ✅ RAYCASTING INTERACTION METADATA
     interactionGroups: [
       { type:"doors", label:"Doors", parts:[{ name:"Door1", rotationAxis:"x", openAngle:-90 },{ name:"Door2", rotationAxis:"x", openAngle:-90 }] },
       { type:"toggles", label:"Lights", parts:[{ name:"Point", label:"Interior Light" }] },
     ],
     uiWidgets: [
-      { type:"doorToggles", title:"Door Toggles" },
-      { type: "lightWidget", title: "Light Control" }, // ✅ Add light widget
+      { type: "lightWidget", title: "Light Control" },
       {
         type: "textureWidget",
         title: "Textures",
@@ -234,19 +236,88 @@ export const modelsConfig = {
     path: "/models/New.glb",
     hideDoorsByDefault: false,
     hiddenInitially: [],
-    // ✅ Empty lights array (no lights in this model)
     lights: [],
+    // ✅ RAYCASTING INTERACTION METADATA - Easy to add new interactions!
     interactionGroups: [
-      { type:"doors", label:"Doors", parts:[{ name:"Door_1", rotationAxis:"y", openAngle:90 },{ name:"Door_2", rotationAxis:"y", openAngle:90 },{ name:"Door_3", rotationAxis:"y", openAngle:90 },{ name:"Door_4", rotationAxis:"y", openAngle:90 }] },
-      { type:"drawers", label:"Drawers", parts:[{ name:"TopDrawer", positionAxis:"z", openPosition:0.18 }] },
+      {
+        type: "doors",
+        label: "Doors",
+        parts: [
+          { name: "Door_1", rotationAxis: "y", openAngle: 90 },
+          { name: "Door_2", rotationAxis: "y", openAngle: 90 },
+          { name: "Door_3", rotationAxis: "y", openAngle: 90 },
+          { name: "Door_4", rotationAxis: "y", openAngle: 90 },
+        ],
+      },
+      {
+        type: "drawers",
+        label: "Drawers",
+        parts: [
+          { name: "TopDrawer", positionAxis: "z", openPosition: 0.18 },
+        ],
+      },
     ],
     uiWidgets: [
-      { type:"doorToggles", title:"Door Toggles" }
-      // No light widget since there are no lights
+      { 
+        type: "globalTextureWidget", 
+        title: "Global Texture", 
+        options: { 
+          exclude: ["Cylinder001.003","Node_4365","Cylinder001"] 
+        } 
+      },
     ],
-    camera: { position:[0,4,11], target:[0,1,0], fov:50 },
+    camera: { position: [0, 4, 11], target: [0, 1, 0], fov: 50 },
   },
+  
+  
 };
+
+/* 
+✅ EXAMPLE: Adding a new model with raycasting interactions
+================================================
+
+YourNewModel: {
+  path: "/models/YourModel.glb",
+  hideDoorsByDefault: false,
+  lights: [
+    { name: "MainLight", defaultState: "on", intensity: 5.0 }
+  ],
+  
+  // ✅ Just define this metadata and raycasting will handle the rest!
+  interactionGroups: [
+    {
+      type: "doors",
+      label: "Cabinet Doors", 
+      parts: [
+        { name: "LeftDoor", rotationAxis: "y", openAngle: -90 },
+        { name: "RightDoor", rotationAxis: "y", openAngle: 90 },
+      ]
+    },
+    {
+      type: "drawers",
+      label: "Storage Drawers",
+      parts: [
+        { name: "TopDrawer", positionAxis: "z", openPosition: 0.5 },
+        { name: "BottomDrawer", positionAxis: "z", openPosition: 0.5 },
+      ]
+    },
+    {
+      type: "toggles",
+      label: "Lighting",
+      parts: [
+        { name: "InteriorLight", label: "Interior LED" }
+      ]
+    }
+  ],
+  
+  uiWidgets: [
+    { type: "lightWidget", title: "Light Control" },
+    { type: "globalTextureWidget", title: "Global Texture" }
+  ],
+  
+  camera: { position: [0, 3, 8], target: [0, 1, 0], fov: 45 },
+},
+*/
 
 // 🔧 Preload all models
 Object.values(modelsConfig).forEach((config) => {

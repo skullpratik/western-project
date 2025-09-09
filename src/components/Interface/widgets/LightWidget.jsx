@@ -1,8 +1,6 @@
 // src/components/widgets/LightWidget.jsx
 import React from 'react';
-import { Button, Typography, Switch, FormControlLabel, Box } from '@mui/material';
-import LightbulbIcon from '@mui/icons-material/Lightbulb';
-import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import "../Interface.css";
 
 export const LightWidget = ({ config, api }) => {
   const { lights = [] } = config;
@@ -54,52 +52,57 @@ export const LightWidget = ({ config, api }) => {
   const anyOn = Object.values(lightsState).some(state => state);
 
   return (
-    <Box sx={{ 
-      background: "#fff", 
-      padding: 2, 
-      borderRadius: 1, 
-      marginBottom: 2 
-    }}>
-      <Typography variant="h6" gutterBottom>
-        Lights Control
-      </Typography>
+    <div className="widget-container">
+      <div className="widget-title">
+        💡 Lights Control
+      </div>
       
       {/* Master toggle */}
-      <Box sx={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
-        <Button
-          variant={anyOn ? "contained" : "outlined"}
-          color={anyOn ? "primary" : "default"}
+      <div style={{ marginBottom: '20px' }}>
+        <button
+          className={`interface-button ${anyOn ? 'btn-warning' : 'secondary'} btn-full-width`}
           onClick={toggleAllLights}
-          startIcon={anyOn ? <LightbulbIcon /> : <LightbulbOutlinedIcon />}
-          sx={{
-            background: anyOn ? '#ffd700' : 'transparent',
-            color: anyOn ? '#000' : '#666',
-            borderColor: anyOn ? '#ffd700' : '#ccc'
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px'
           }}
         >
+          <span>{anyOn ? '💡' : '🔆'}</span>
           {allOn ? 'All Lights ON' : anyOn ? 'Some Lights ON' : 'All Lights OFF'}
-        </Button>
-      </Box>
+        </button>
+      </div>
 
       {/* Individual light controls */}
       {lights.map(light => (
-        <Box key={light.name} sx={{ display: 'flex', alignItems: 'center', marginBottom: 1 }}>
-          <FormControlLabel
-            control={
-              <Switch
+        <div key={light.name} className="form-group">
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            background: lightsState[light.name] ? 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)' : 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+            border: `2px solid ${lightsState[light.name] ? '#ffeaa7' : '#e2e8f0'}`,
+            borderRadius: '16px',
+            transition: 'all 0.3s ease'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '24px' }}>{lightsState[light.name] ? '💡' : '🔘'}</span>
+              <span className="form-label" style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>{light.name}</span>
+            </div>
+            <label className="switch">
+              <input
+                type="checkbox"
                 checked={lightsState[light.name] || false}
                 onChange={(e) => toggleLight(light.name, e.target.checked)}
-                color="primary"
               />
-            }
-            label={light.name}
-          />
-          <Typography variant="body2" sx={{ color: 'text.secondary', ml: 1 }}>
-            {lightsState[light.name] ? 'ON' : 'OFF'}
-          </Typography>
-        </Box>
+              <span className="slider"></span>
+            </label>
+          </div>
+        </div>
       ))}
-    </Box>
+    </div>
   );
 };
 
