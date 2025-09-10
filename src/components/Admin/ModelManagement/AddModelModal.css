@@ -590,3 +590,180 @@
     text-align: center;
   }
 }
+
+/* Individual Part Editing Styles */
+.parts-in-group {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.part-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.part-info {
+  flex-grow: 1;
+}
+
+.part-name {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-right: 8px;
+}
+
+.part-details {
+  margin-top: 2px;
+}
+
+.part-detail {
+  font-size: 12px;
+  color: #666;
+  background: #e3f2fd;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 4px;
+}
+
+.part-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-edit-small, .btn-remove-small {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit-small {
+  color: #3498db;
+  border-color: #3498db;
+}
+
+.btn-edit-small:hover {
+  background: #3498db;
+  color: white;
+}
+
+.btn-remove-small {
+  color: #e74c3c;
+  border-color: #e74c3c;
+}
+
+.btn-remove-small:hover {
+  background: #e74c3c;
+  color: white;
+}
+
+.edit-part-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px;
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+}
+
+.btn-update {
+  background: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-update:hover {
+  background: #219a52;
+}
+
+.btn-cancel {
+  background: #95a5a6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-cancel:hover {
+  background: #7f8c8d;
+}
+
+.group-parts h6 {
+  margin: 8px 0 4px 0;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+/* UI Widgets Section Styles */
+.widget-draft {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 16px;
+}
+
+.widgets-list {
+  margin-top: 16px;
+}
+
+.widgets-list h6 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.widget-type {
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+.widget-title {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+/* Camera Configuration Grid */
+.camera-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 768px) {
+  .camera-grid {
+    grid-template-columns: 1fr;
+  }
+}

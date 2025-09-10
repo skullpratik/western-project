@@ -14,6 +14,7 @@ const emptyState = {
   groups: [],
   groupDraft: { type:'doors', label:'', parts: [] },
   partDraft: { name:'', rotationAxis:'y', openAngle:'90', positionAxis:'', openPosition:'' },
+  editingPart: null, // { groupIndex, partIndex } when editing a specific part
   widgets: [],
   widgetDraft: { type:'lightWidget', title:'' },
   // Texture widget configuration
@@ -35,20 +36,85 @@ const emptyState = {
       wrapT: 'ClampToEdgeWrapping'
     }
   },
-  textureDraft: { name: '', path: '' },
+  textureDraft: { name: '', path: '', file: null, uploading: false },
   rawMode: false,
   rawJson: ''
 };
 
-const parseVec = (str) => str.split(',').map(v=>parseFloat(v.trim())).filter(v=>!Number.isNaN(v));
+const parseVec = (input) => {
+  if (Array.isArray(input)) return input;
+  if (typeof input === 'string') return input.split(',').map(v=>parseFloat(v.trim())).filter(v=>!Number.isNaN(v));
+  return [];
+};
 
-const AddModelModalEnhanced = ({ onClose, onAdd }) => {
+const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = false }) => {
   const [state, setState] = useState(emptyState);
   const [feedback, setFeedback] = useState(null);
   const [rawError, setRawError] = useState(null);
   const objectUrlsRef = useRef([]);
 
   const update = (patch) => setState(s => ({ ...s, ...patch }));
+
+  // Initialize form with edit model data
+  useEffect(() => {
+    if (isEditMode && editModel) {
+      const editState = {
+        name: editModel.name || '',
+        path: editModel.file || '',
+        selectedFile: null, // Don't include file for editing
+        assets: editModel.assets || { base: '', doors: '', glassDoors: '', drawers: '' },
+        useAssets: !!(editModel.assets?.base || editModel.assets?.doors || editModel.assets?.glassDoors || editModel.assets?.drawers),
+        camera: {
+          position: editModel.camera?.position ? (Array.isArray(editModel.camera.position) ? editModel.camera.position.join(',') : editModel.camera.position) : '0,2,5',
+          target: editModel.camera?.target ? (Array.isArray(editModel.camera.target) ? editModel.camera.target.join(',') : editModel.camera.target) : '0,1,0',
+          fov: editModel.camera?.fov?.toString() || '50'
+        },
+        hidden: editModel.hiddenInitially?.join(', ') || '',
+        lights: editModel.lights || [],
+        lightDraft: { name:'', defaultState:'on', intensity:'5' },
+        groups: editModel.interactionGroups || [],
+        groupDraft: { type:'doors', label:'', parts: [] },
+        partDraft: { name:'', rotationAxis:'y', openAngle:'90', positionAxis:'', openPosition:'' },
+        editingPart: null,
+        widgets: editModel.uiWidgets?.filter(w => w.type !== 'textureWidget') || [],
+        widgetDraft: { type:'lightWidget', title:'' },
+        // Handle texture widget
+        textureWidget: (() => {
+          const textureWidget = editModel.uiWidgets?.find(w => w.type === 'textureWidget');
+          if (textureWidget) {
+            return {
+              enabled: true,
+              title: textureWidget.title || 'Textures',
+              parts: textureWidget.parts || [],
+              textures: textureWidget.textures || []
+            };
+          }
+          return {
+            enabled: false,
+            title: 'Textures',
+            parts: [],
+            textures: []
+          };
+        })(),
+        texturePartDraft: { 
+          name: '', 
+          mapping: {
+            offset: { x: 0, y: 0 },
+            center: { x: 0.5, y: 0.5 },
+            rotation: 0,
+            repeat: { x: 1, y: 1 },
+            flipY: false,
+            wrapS: 'ClampToEdgeWrapping',
+            wrapT: 'ClampToEdgeWrapping'
+          }
+        },
+        textureDraft: { name: '', path: '', file: null, uploading: false },
+        rawMode: false,
+        rawJson: ''
+      };
+      setState(editState);
+    }
+  }, [isEditMode, editModel]);
 
   // Light management
   const addLight = () => {
@@ -79,6 +145,65 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
 
   const removeGroup = (i) => update({ groups: state.groups.filter((_,idx)=>idx!==i) });
 
+  // Individual part management within groups
+  const editPartInGroup = (groupIndex, partIndex) => {
+    const group = state.groups[groupIndex];
+    const part = group.parts[partIndex];
+    
+    // Populate the part draft with the selected part's data for editing
+    update({ 
+      partDraft: { 
+        name: part.name,
+        rotationAxis: part.rotationAxis || 'y',
+        openAngle: part.openAngle || '90',
+        positionAxis: part.positionAxis || '',
+        openPosition: part.openPosition || ''
+      },
+      editingPart: { groupIndex, partIndex }
+    });
+  };
+
+  const updatePartInGroup = () => {
+    const { groupIndex, partIndex } = state.editingPart;
+    if (groupIndex === undefined || partIndex === undefined) return;
+    
+    const updatedGroups = [...state.groups];
+    const updatedPart = {
+      name: state.partDraft.name,
+      ...(state.partDraft.rotationAxis && { rotationAxis: state.partDraft.rotationAxis }),
+      ...(state.partDraft.openAngle && { openAngle: state.partDraft.openAngle }),
+      ...(state.partDraft.positionAxis && { positionAxis: state.partDraft.positionAxis }),
+      ...(state.partDraft.openPosition && { openPosition: state.partDraft.openPosition })
+    };
+    
+    updatedGroups[groupIndex].parts[partIndex] = updatedPart;
+    
+    update({ 
+      groups: updatedGroups,
+      partDraft: { name:'', rotationAxis:'y', openAngle:'90', positionAxis:'', openPosition:'' },
+      editingPart: null
+    });
+  };
+
+  const removePartFromGroup = (groupIndex, partIndex) => {
+    const updatedGroups = [...state.groups];
+    updatedGroups[groupIndex].parts.splice(partIndex, 1);
+    
+    // If group becomes empty, remove it
+    if (updatedGroups[groupIndex].parts.length === 0) {
+      updatedGroups.splice(groupIndex, 1);
+    }
+    
+    update({ groups: updatedGroups });
+  };
+
+  const cancelPartEdit = () => {
+    update({ 
+      partDraft: { name:'', rotationAxis:'y', openAngle:'90', positionAxis:'', openPosition:'' },
+      editingPart: null
+    });
+  };
+
   // Part management
   const addPart = () => {
     if(!state.partDraft.name) return;
@@ -98,7 +223,23 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
   // Widget management
   const addWidget = () => {
     if(!state.widgetDraft.type) return;
-    update({ widgets: [...state.widgets, { ...state.widgetDraft }], widgetDraft: { type:'lightWidget', title:'' } });
+    
+    // For global texture widgets, add special configuration
+    const widget = { ...state.widgetDraft };
+    if (widget.type === 'globalTextureWidget') {
+      widget.config = {
+        global: true,
+        applyToAll: true,
+        allowedTextures: [], // Empty - users will upload their own
+        defaultTexture: null,
+        allowUserUpload: true // Allow users to upload textures
+      };
+    }
+    
+    update({ 
+      widgets: [...state.widgets, widget], 
+      widgetDraft: { type:'lightWidget', title:'' } 
+    });
   };
 
   const removeWidget = (i) => update({ widgets: state.widgets.filter((_,idx)=>idx!==i) });
@@ -163,31 +304,71 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
     if(state.rawMode) {
       try { return JSON.parse(state.rawJson); } catch { return null; }
     }
+    
+    // Parse camera values safely
     const cameraPos = parseVec(state.camera.position);
     const cameraTarget = parseVec(state.camera.target);
-    if(cameraPos.length!==3 || cameraTarget.length!==3) { setFeedback({ type:'error', msg:'Camera vectors must have 3 numbers' }); return null; }
+    const cameraFov = parseFloat(state.camera.fov) || 50;
+    
+    if(cameraPos.length !== 3 || cameraTarget.length !== 3) { 
+      setFeedback({ type:'error', msg:'Camera position and target must have 3 numbers (X,Y,Z)' }); 
+      return null; 
+    }
+    
     const cfg = {};
+    
+    // Handle model path/assets
     if(state.useAssets) {
       const filtered = Object.fromEntries(Object.entries(state.assets).filter(([,v])=>v));
-      if(Object.keys(filtered).length===0) { setFeedback({ type:'error', msg:'At least one asset path required' }); return null; }
+      if(Object.keys(filtered).length===0) { 
+        setFeedback({ type:'error', msg:'At least one asset path required' }); 
+        return null; 
+      }
       cfg.assets = filtered;
     } else {
       const pathToUse = modelPath || state.path;
-      if(!pathToUse && !state.selectedFile) { setFeedback({ type:'error', msg:'Model path or file required' }); return null; }
+      if(!pathToUse && !state.selectedFile) { 
+        setFeedback({ type:'error', msg:'Model path or file required' }); 
+        return null; 
+      }
       if(pathToUse) cfg.path = pathToUse;
     }
+    
+    // Set camera configuration
+    cfg.camera = { 
+      position: cameraPos, 
+      target: cameraTarget, 
+      fov: cameraFov 
+    };
+    
+    // Handle hidden parts
     const hidden = state.hidden.split(/[,\n]/).map(s=>s.trim()).filter(Boolean);
     if(hidden.length) cfg.hiddenInitially = hidden;
-    if(state.lights.length) cfg.lights = state.lights.map(l=>({ name:l.name, defaultState:l.defaultState, intensity: parseFloat(l.intensity)||1 }));
-    if(state.groups.length) cfg.interactionGroups = state.groups.map(g=>({ type:g.type, label:g.label, parts:g.parts }));
+    
+    // Handle lights
+    if(state.lights.length) {
+      cfg.lights = state.lights.map(l=>({ 
+        name: l.name, 
+        defaultState: l.defaultState, 
+        intensity: parseFloat(l.intensity) || 1 
+      }));
+    }
+    
+    // Handle interaction groups
+    if(state.groups.length) {
+      cfg.interactionGroups = state.groups.map(g=>({ 
+        type: g.type, 
+        label: g.label, 
+        parts: g.parts 
+      }));
+    }
     
     // Build UI widgets
     const widgets = [...(state.widgets || [])];
+    console.log('BUILDING WIDGETS:', state.widgets);
     console.log('TEXTURE WIDGET STATE:', state.textureWidget);
-    console.log('TEXTURE WIDGET ENABLED:', state.textureWidget.enabled);
-    console.log('TEXTURE WIDGET PARTS:', state.textureWidget.parts.length);
-    console.log('TEXTURE WIDGET TEXTURES:', state.textureWidget.textures.length);
     
+    // Add texture widget if enabled and configured
     if(state.textureWidget.enabled && (state.textureWidget.parts.length > 0 || state.textureWidget.textures.length > 0)) {
       const textureWidgetConfig = {
         type: 'textureWidget',
@@ -200,9 +381,10 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
       console.log('ADDING TEXTURE WIDGET:', textureWidgetConfig);
       widgets.push(textureWidgetConfig);
     }
+    
     if(widgets.length) cfg.uiWidgets = widgets;
     
-    cfg.camera = { position: cameraPos, target: cameraTarget, fov: parseFloat(state.camera.fov)||50 };
+    console.log('FINAL CONFIG:', cfg);
     return cfg;
   }, [state]);
 
@@ -215,18 +397,19 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
       return; 
     }
     
-    if(!state.selectedFile && !state.path) {
+    // For edit mode, file is optional since the model already exists
+    if(!isEditMode && !state.selectedFile && !state.path) {
       setFeedback({ type:'error', msg:'Model file required' }); 
       return; 
     }
 
     try {
-      setFeedback({ type:'info', msg:'Uploading model...' });
+      setFeedback({ type:'info', msg: isEditMode ? 'Updating model...' : 'Uploading model...' });
       
       let modelPath = state.path;
       
-      // If we have a selected file but no path, upload it now with complete configuration
-      if (state.selectedFile && !state.path) {
+      // Only handle file upload for new models or when a new file is selected
+      if (state.selectedFile && !isEditMode) {
         console.log('UPLOADING FILE WITH COMPLETE CONFIG...');
         console.log('Current state.groups before config build:', state.groups);
         console.log('Current state.groupDraft before config build:', state.groupDraft);
@@ -251,27 +434,33 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
         const uploadResult = await uploadResponse.json();
         modelPath = uploadResult.path;
         console.log('FILE UPLOADED TO:', modelPath);
+      } else if (isEditMode) {
+        // For edit mode, keep the existing file path
+        modelPath = editModel.file;
       }
       
       // Build the complete configuration including texture widgets
       const config = buildConfig(modelPath);
-      console.log('FINAL UPLOAD CONFIG:', config);
+      console.log('FINAL CONFIG:', config);
       console.log('FINAL CONFIG UI WIDGETS:', config?.uiWidgets);
-      console.log('CURRENT STATE.WIDGETS:', state.widgets);
-      console.log('CURRENT STATE.TEXTUREWIDGET:', state.textureWidget);
       
       if (!config) {
         setFeedback({ type:'error', msg:'Invalid configuration' });
         return;
       }
       
-      // Save model with complete configuration
-      console.log('About to save model config...');
+      // Save or update model with complete configuration
+      const url = isEditMode 
+        ? `http://localhost:5000/api/admin/models/${editModel._id}`
+        : 'http://localhost:5000/api/admin/models';
+      const method = isEditMode ? 'PUT' : 'POST';
+      
+      console.log(`About to ${isEditMode ? 'update' : 'save'} model config...`);
       console.log('Model path:', modelPath);
       console.log('Config:', config);
       
-      const response = await fetch('http://localhost:5000/api/admin/models', {
-        method: 'POST',
+      const response = await fetch(url, {
+        method: method,
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -283,6 +472,12 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
         })
       });
       
+      console.log('REQUEST SENT TO BACKEND:', {
+        name: state.name,
+        path: modelPath,
+        ...config
+      });
+      
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
       
@@ -291,20 +486,33 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
       }
       
       const result = await response.json();
-      console.log('MODEL SAVED:', result);
+      console.log(`MODEL ${isEditMode ? 'UPDATED' : 'SAVED'}:`, result);
       
       onAdd();
-      setFeedback({ type:'success', msg:'Model added successfully!' });
-      setState(emptyState);
+      setFeedback({ 
+        type:'success', 
+        msg: isEditMode ? 'Model updated successfully!' : 'Model added successfully!' 
+      });
+      
+      // Only reset form for new models, not for edits
+      if (!isEditMode) {
+        setState(emptyState);
+      } else {
+        // For edits, just show success message but keep the form data
+        // The parent component should handle closing the modal
+      }
       
     } catch (err) {
-      console.error('Error adding model:', err);
+      console.error(`Error ${isEditMode ? 'updating' : 'adding'} model:`, err);
       console.error('Error details:', {
         message: err.message,
         stack: err.stack,
         name: err.name
       });
-      setFeedback({ type:'error', msg: `Failed to add model: ${err.message}` });
+      setFeedback({ 
+        type:'error', 
+        msg: `Failed to ${isEditMode ? 'update' : 'add'} model: ${err.message}` 
+      });
     }
   };
 
@@ -323,7 +531,7 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
     <div className="modal-overlay">
       <div className="modal add-model-modal enhanced">
         <div className="modal-header">
-          <h3>🎯 Add New 3D Model</h3>
+          <h3>{isEditMode ? '✏️ Edit Model' : '🎯 Add New 3D Model'}</h3>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         
@@ -365,7 +573,7 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
               <div className="form-section">
                 <div className="section-header">
                   <h4>📁 Model Files</h4>
-                  <p>Upload your 3D model files</p>
+                  <p>{isEditMode ? 'Update your 3D model files (optional)' : 'Upload your 3D model files'}</p>
                 </div>
 
                 <div className="form-group">
@@ -601,6 +809,14 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
                           <button type="button" onClick={addPart} className="btn-add">Add Part</button>
                         </div>
                         
+                        {/* Show editing buttons when editing a part */}
+                        {state.editingPart && (
+                          <div className="edit-part-actions">
+                            <button type="button" onClick={updatePartInGroup} className="btn-update">Update Part</button>
+                            <button type="button" onClick={cancelPartEdit} className="btn-cancel">Cancel Edit</button>
+                          </div>
+                        )}
+                        
                         {state.groupDraft.parts.length > 0 && (
                           <div className="parts-list">
                             <h6>Parts in current group:</h6>
@@ -625,16 +841,99 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
                     <div className="groups-list">
                       <h6>Configured Groups:</h6>
                       <ul className="group-list">
-                        {state.groups.map((g, i) => (
-                          <li key={i} className="group-item">
+                        {state.groups.map((g, groupIndex) => (
+                          <li key={groupIndex} className="group-item">
                             <div className="group-header">
                               <span className="group-type">{g.type}</span>
                               <span className="group-label">{g.label}</span>
-                              <button type="button" onClick={() => removeGroup(i)} className="btn-remove">Remove</button>
+                              <button type="button" onClick={() => removeGroup(groupIndex)} className="btn-remove">Remove Group</button>
                             </div>
                             <div className="group-parts">
-                              {g.parts.length} parts: {g.parts.map(p => p.name).join(', ')}
+                              <h6>Parts ({g.parts.length}):</h6>
+                              <ul className="parts-in-group">
+                                {g.parts.map((part, partIndex) => (
+                                  <li key={partIndex} className="part-item">
+                                    <div className="part-info">
+                                      <span className="part-name">{part.name}</span>
+                                      <div className="part-details">
+                                        {part.rotationAxis && <span className="part-detail">↻ {part.rotationAxis} axis, {part.openAngle}°</span>}
+                                        {part.positionAxis && <span className="part-detail">→ {part.positionAxis} axis, {part.openPosition}</span>}
+                                      </div>
+                                    </div>
+                                    <div className="part-actions">
+                                      <button 
+                                        type="button" 
+                                        onClick={() => editPartInGroup(groupIndex, partIndex)} 
+                                        className="btn-edit-small"
+                                        title="Edit this part"
+                                      >
+                                        ✏️
+                                      </button>
+                                      <button 
+                                        type="button" 
+                                        onClick={() => removePartFromGroup(groupIndex, partIndex)} 
+                                        className="btn-remove-small"
+                                        title="Remove this part"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Other UI Widgets Section */}
+              <div className="form-section">
+                <div className="section-header">
+                  <h4>🔧 Other UI Widgets</h4>
+                  <p>Add additional interface widgets like light controls, reflection toggles, etc.</p>
+                </div>
+
+                <div className="subsection">
+                  <h5>Add Widget</h5>
+                  
+                  <div className="widget-draft">
+                    <div className="draft-row">
+                      <select 
+                        value={state.widgetDraft.type} 
+                        onChange={e=>update({ widgetDraft:{ ...state.widgetDraft, type:e.target.value } })}
+                        className="form-select"
+                      >
+                        <option value="lightWidget">Light Widget</option>
+                        <option value="reflectionWidget">Reflection Widget</option>
+                        <option value="movementWidget">Movement Widget</option>
+                        <option value="globalTextureWidget">Global Texture Widget</option>
+                        <option value="customWidget">Custom Widget</option>
+                      </select>
+                      
+                      <input 
+                        placeholder="Widget Title (e.g., Lighting Controls)" 
+                        value={state.widgetDraft.title} 
+                        onChange={e=>update({ widgetDraft:{ ...state.widgetDraft, title:e.target.value } })}
+                        className="form-input"
+                      />
+                      
+                      <button type="button" onClick={addWidget} className="btn-add">Add Widget</button>
+                    </div>
+                  </div>
+
+                  {state.widgets.length > 0 && (
+                    <div className="widgets-list">
+                      <h6>Configured Widgets:</h6>
+                      <ul className="pill-list">
+                        {state.widgets.map((w, i) => (
+                          <li key={i} className="pill">
+                            <span className="widget-type">{w.type}</span>
+                            <span className="widget-title">{w.title || 'Untitled'}</span>
+                            <button type="button" onClick={() => removeWidget(i)} className="btn-remove">×</button>
                           </li>
                         ))}
                       </ul>
@@ -747,7 +1046,7 @@ const AddModelModalEnhanced = ({ onClose, onAdd }) => {
               {/* Submit */}
               <div className="form-actions">
                 <button type="submit" className="btn-primary btn-large">
-                  🚀 Add Model
+                  {isEditMode ? '✏️ Update Model' : '🚀 Add Model'}
                 </button>
                 <button type="button" onClick={onClose} className="btn-secondary">
                   Cancel

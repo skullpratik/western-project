@@ -6,7 +6,7 @@ import './ModelManagement.css';
 
 const API_BASE_URL = 'http://localhost:5000';
 
-const ModelCard = ({ modelName, config, onDelete, isDbModel }) => {
+const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
   const [open, setOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -33,16 +33,28 @@ const ModelCard = ({ modelName, config, onDelete, isDbModel }) => {
         </div>
         <div className="card-actions">
           {isDbModel && (
-            <button 
-              className="btn-danger-small" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowDeleteConfirm(true);
-              }}
-              title="Delete model"
-            >
-              🗑️
-            </button>
+            <>
+              <button 
+                className="btn-secondary-small" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(config);
+                }}
+                title="Edit model metadata"
+              >
+                ✏️
+              </button>
+              <button 
+                className="btn-danger-small" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(true);
+                }}
+                title="Delete model"
+              >
+                🗑️
+              </button>
+            </>
           )}
           <button className="details-toggle" type="button">{open ? 'Hide' : 'Details'}</button>
         </div>
@@ -184,6 +196,8 @@ const ModelCard = ({ modelName, config, onDelete, isDbModel }) => {
 const ModelManagement = () => {
   const [dbModels, setDbModels] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editModel, setEditModel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -230,7 +244,14 @@ const ModelManagement = () => {
         metadata: model.metadata || {},
         uploadedBy: model.uploadedBy,
         createdAt: model.createdAt,
-        status: model.status
+        status: model.status,
+        // Include all the fields that might contain configuration data
+        camera: model.camera,
+        lights: model.lights,
+        hiddenInitially: model.hiddenInitially,
+        uiWidgets: model.uiWidgets,
+        assets: model.assets,
+        presets: model.presets
       };
     });
     return formatted;
@@ -273,6 +294,59 @@ const ModelManagement = () => {
       setShowAdd(false);
     } catch (err) {
       console.error('Error refreshing models after add:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditModel = (config) => {
+    // Find the original model data from dbModels
+    const originalModel = dbModels.find(model => model._id === config.id);
+    if (originalModel) {
+      // Create a properly formatted model object for editing
+      const editModelData = {
+        ...originalModel,
+        file: originalModel.file, // Use the actual file path from DB
+        name: originalModel.name,
+        // Extract camera data from metadata if it's there, or use top-level
+        camera: originalModel.camera || originalModel.metadata?.camera,
+        lights: originalModel.lights || originalModel.metadata?.lights || [],
+        hiddenInitially: originalModel.hiddenInitially || originalModel.metadata?.hiddenInitially || [],
+        uiWidgets: originalModel.uiWidgets || originalModel.metadata?.uiWidgets || [],
+        assets: originalModel.assets,
+        interactionGroups: originalModel.interactionGroups || []
+      };
+      console.log('Setting edit model with camera data:', editModelData.camera);
+      setEditModel(editModelData);
+      setShowEdit(true);
+    }
+  };
+
+  const handleUpdateModel = async (modelData) => {
+    try {
+      setLoading(true);
+      
+      // Refresh the models list after successful update
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/admin/models`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const models = await response.json();
+        setDbModels(models);
+        
+        // Fire event so MainApp can refresh
+        window.dispatchEvent(new Event('modelsUpdated'));
+      }
+      
+      setShowEdit(false);
+      setEditModel(null);
+    } catch (err) {
+      console.error('Error refreshing models after update:', err);
     } finally {
       setLoading(false);
     }
@@ -366,11 +440,23 @@ const ModelManagement = () => {
             modelName={modelName} 
             config={config}
             onDelete={handleDeleteModel}
+            onEdit={handleEditModel}
             isDbModel={!!config.id} // Models from database have an id
           />
         ))}
       </div>
       {showAdd && <AddModelModalEnhanced onClose={()=>setShowAdd(false)} onAdd={handleAddModel} />}
+      {showEdit && editModel && (
+        <AddModelModalEnhanced 
+          onClose={() => {
+            setShowEdit(false);
+            setEditModel(null);
+          }} 
+          onAdd={handleUpdateModel}
+          editModel={editModel}
+          isEditMode={true}
+        />
+      )}
     </div>
   );
 };

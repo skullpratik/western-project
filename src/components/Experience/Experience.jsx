@@ -24,6 +24,7 @@ export function Experience({ modelName, modelConfig, allModels, onTogglePart, on
   }
   
   const { camera, gl } = useThree();
+  const orbitControlsRef = useRef();
   const [hoveredObject, setHoveredObject] = useState(null);
   const [lights, setLights] = useState([]);
   const allObjects = useRef({});
@@ -363,13 +364,32 @@ export function Experience({ modelName, modelConfig, allModels, onTogglePart, on
 
     // camera
     if (config.camera) {
+      console.log('🎥 Setting camera from config:', config.camera);
       const { position, target, fov } = config.camera;
-      if (position) camera.position.set(...position);
+      
+      if (position) {
+        console.log('📍 Setting camera position to:', position);
+        camera.position.set(...position);
+      }
+      
       if (fov) {
         camera.fov = fov;
         camera.updateProjectionMatrix();
       }
-      if (target) camera.lookAt(...target);
+      
+      // Force OrbitControls to update after camera changes
+      setTimeout(() => {
+        if (orbitControlsRef.current) {
+          console.log('🔄 Updating OrbitControls');
+          // Set the target if specified
+          if (target) {
+            orbitControlsRef.current.target.set(...target);
+          }
+          orbitControlsRef.current.update();
+        }
+      }, 100);
+    } else {
+      console.log('❌ No camera config found in:', config);
     }
 
     // Log model load
@@ -707,6 +727,7 @@ export function Experience({ modelName, modelConfig, allModels, onTogglePart, on
       </group>
 
       <OrbitControls 
+        ref={orbitControlsRef}
         target={config.camera?.target || [0, 0, 0]}
         enabled={userPermissions?.canRotate || false}
         enablePan={userPermissions?.canPan || false}
