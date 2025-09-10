@@ -30,16 +30,20 @@ function App() {
           <Route path="/admin/*" element={<AdminLayout />} />
         )}
         
-        {/* Main 3D App Routes */}
-        <Route path="/" element={<MainApp />} />
-        <Route path="/app" element={<MainApp />} />
+        {/* Main 3D App Routes - only for non-admin users */}
+        {user.role !== 'admin' && (
+          <>
+            <Route path="/" element={<MainApp />} />
+            <Route path="/app" element={<MainApp />} />
+          </>
+        )}
         
         {/* Redirect based on role */}
         <Route 
           path="*" 
           element={
             <Navigate 
-              to={user.role === 'admin' ? '/admin/dashboard' : '/app'} 
+              to={user.role === 'admin' ? '/admin/dashboard' : '/'} 
               replace 
             />
           } 

@@ -1,19 +1,35 @@
 import React from 'react';
 import { widgetRegistry } from './widgets/index.jsx';
-import { modelsConfig } from '../../modelsConfig';
 import './Interface.css';
 
-export function Interface({ 
-  selectedModel, 
-  togglePart, 
-  applyDoorSelection, 
-  api, 
-  applyRequest, 
-  userPermissions 
+export function Interface({
+  selectedModel,
+  onModelChange,
+  onLogout,
+  userName,
+  togglePart,
+  applyDoorSelection,
+  api,
+  applyRequest,
+  userPermissions,
+  models = {}, // merged models map passed from MainApp
 }) {
-  // Get the current model configuration
-  const config = modelsConfig[selectedModel] || {};
+  // Current model config from provided map
+  const config = models[selectedModel] || {};
   const allWidgets = config.uiWidgets || [];
+  
+  console.log('=== INTERFACE DEBUG ===');
+  console.log('Selected Model:', selectedModel);
+  console.log('Available Models:', Object.keys(models));
+  console.log('Config for selected model:', config);
+  console.log('Config.metadata:', config.metadata);
+  console.log('Config.metadata.uiWidgets:', config.metadata?.uiWidgets);
+  console.log('Config.uiWidgets:', config.uiWidgets);
+  console.log('All Widgets:', allWidgets);
+  console.log('User Permissions:', userPermissions);
+  console.log('Config.interactionGroups:', config.interactionGroups);
+  console.log('Interaction Groups Length:', config.interactionGroups?.length || 0);
+  console.log('=======================');
 
   // Permission helpers (backend uses specific keys; derive common intents)
   const hasPermission = (permission) => {
@@ -48,6 +64,7 @@ export function Interface({
       globalTextureWidget: 'globalTextureWidget',
       textureWidget: 'textureWidget',
       lightWidget: 'lightWidget',
+      saveConfig: 'saveConfig',
     };
     return permissionMap[widgetType] || 'canRead';
   };
@@ -59,7 +76,7 @@ export function Interface({
   });
 
   // Render individual widget
-  const renderWidget = (widget) => {
+  const renderWidget = (widget, index) => {
     const WidgetComponent = widgetRegistry[widget.type];
     if (!WidgetComponent) {
       console.warn(`Widget type "${widget.type}" not found in registry`);
@@ -68,7 +85,7 @@ export function Interface({
 
     return (
       <WidgetComponent
-        key={widget.type}
+        key={`${widget.type}-${index}`}
         config={config}
         api={api}
         togglePart={togglePart}
@@ -92,7 +109,7 @@ export function Interface({
   }
 
   // No widgets configured or no permissions for any widgets
-  if (!widgets.length) {
+  if (!widgets.length && !hasPermission('saveConfig')) {
     return (
       <div className="no-permissions">
         <h3>⚙️ No Configuration Available</h3>
@@ -103,39 +120,49 @@ export function Interface({
 
   return (
     <div className="interface-container">
-      <div className="simple-guide">
-        <p>📐 Configure your {selectedModel} model using the tools below:</p>
+      <div className="interface-toolbar compact">
+        <div className="toolbar-center left">
+          <select
+            id="modelSelect"
+            aria-label="Select Model"
+            className="toolbar-select enhanced"
+            value={selectedModel}
+            onChange={(e) => onModelChange?.(e.target.value)}
+          >
+            {Object.keys(models).map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div className="toolbar-right">
+          {userName && <span className="user-label" title={userName}>{userName}</span>}
+          {onLogout && (
+            <button className="toolbar-logout" onClick={onLogout} title="Logout">Logout</button>
+          )}
+        </div>
       </div>
       
       <div className="widgets-container">
-        {widgets.map(renderWidget)}
+        {widgets.map((widget, index) => renderWidget(widget, index))}
       </div>
 
-      {/* Quick Actions - Only show if user has edit permissions */}
-  {(hasPermission('canEdit')) && (
-        <div className="widget-container">
+      {/* Quick Actions - Save Config Widget Only */}
+      {hasPermission('saveConfig') && (
+        <div className="widget-container save-config-widget">
           <h4 className="widget-title">🎯 Quick Actions</h4>
-          <div className="button-grid-2">
-            <button 
-              className="btn btn-secondary"
-              onClick={() => api?.resetModel?.()}
-      disabled={!hasPermission('canEdit')}
-            >
-              🔄 Reset Model
-            </button>
-            <button 
-              className="btn btn-primary"
-              onClick={() => api?.saveConfiguration?.()}
-      disabled={!hasPermission('canEdit')}
-            >
-              💾 Save Config
-            </button>
+          <button 
+            className="btn btn-primary save-config-btn"
+            onClick={() => api?.saveConfiguration?.()}
+            disabled={!hasPermission('saveConfig')}
+          >
+            � Save Config
+          </button>
+          <div className="save-config-info">
+            <span className="info-text">Save current model configuration</span>
           </div>
         </div>
       )}
 
       {/* Model Info */}
-      <div className="widget-container">
+  <div className="widget-container">
         <h4 className="widget-title">📋 Model Information</h4>
         <div className="model-info">
           <div className="info-item">

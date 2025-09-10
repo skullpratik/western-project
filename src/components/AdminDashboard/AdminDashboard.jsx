@@ -247,6 +247,14 @@ function UserPermissionsForm({ user, onUpdate, onCancel }) {
             />
             Global Texture
           </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={permissions.saveConfig || false}
+              onChange={() => handlePermissionChange("saveConfig")}
+            />
+            Save Config
+          </label>
         </div>
       </div>
 

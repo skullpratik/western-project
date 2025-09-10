@@ -1,12 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+// Temporarily disabled chart imports to fix React hooks issue
+// import { Line, Doughnut, Bar } from 'react-chartjs-2';
+// import {
+//   Chart as ChartJS,
+//   LineElement,
+//   PointElement,
+//   LinearScale,
+//   CategoryScale,
+//   ArcElement,
+//   BarElement,
+//   Tooltip,
+//   Legend
+// } from 'chart.js';
 import { useAuth } from '../../../context/AuthContext';
 import './Dashboard.css';
+
+// ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, ArcElement, BarElement, Tooltip, Legend);
 
 const Dashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
+    inactiveUsers: 0,
+    adminUsers: 0,
+    standardUsers: 0,
     totalModels: 0,
     recentActivity: []
   });
@@ -22,7 +40,7 @@ const Dashboard = () => {
       const token = localStorage.getItem('token');
       
       // Fetch user stats
-  const usersResponse = await fetch('/api/admin/users', {
+  const usersResponse = await fetch('/api/admin-dashboard/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -31,10 +49,18 @@ const Dashboard = () => {
       
       if (usersResponse.ok) {
         const users = await usersResponse.json();
+        const total = users.length;
+        const active = users.filter(u => u.isActive).length;
+        const inactive = total - active;
+        const admins = users.filter(u => u.role === 'admin').length;
+        const standard = total - admins;
         setStats(prev => ({
           ...prev,
-          totalUsers: users.length,
-          activeUsers: users.filter(u => u.isActive).length
+          totalUsers: total,
+            activeUsers: active,
+            inactiveUsers: inactive,
+            adminUsers: admins,
+            standardUsers: standard,
         }));
       }
 
@@ -55,7 +81,7 @@ const Dashboard = () => {
       }
 
       // Fetch activity stats
-  const activityResponse = await fetch('/api/admin/activity/stats', {
+  const activityResponse = await fetch('/api/activity/stats', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -76,117 +102,165 @@ const Dashboard = () => {
     }
   };
 
-  const StatCard = ({ title, value, icon, color, trend }) => (
-    <div className={`stat-card ${color}`}>
-      <div className="stat-icon">
-        <span>{icon}</span>
-      </div>
-      <div className="stat-content">
-        <h3>{title}</h3>
-        <div className="stat-value">{value}</div>
-        {trend && (
-          <div className={`stat-trend ${trend.direction}`}>
-            <span>{trend.direction === 'up' ? '↗' : '↘'}</span>
-            {trend.value}
-          </div>
-        )}
+  const StatCard = ({ title, value, icon, color }) => (
+    <div className="kt-card"> 
+      <div className="kt-card-header">
+        <div className="kt-card-icon">{icon}</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:'12px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.5px', color:'var(--kt-text-soft)', marginBottom:'4px'}}>{title}</div>
+          <div className="kt-card-value">{value}</div>
+        </div>
       </div>
     </div>
   );
 
+  // Chart colors and data generation temporarily disabled
+  // const chartColors = {
+  //   primary: 'rgba(99,102,241,0.9)',
+  //   primaryLine: 'rgba(99,102,241,0.3)',
+  //   success: 'rgba(16,185,129,0.9)',
+  //   warning: 'rgba(245,158,11,0.9)',
+  //   danger: 'rgba(220,38,38,0.9)',
+  //   info: 'rgba(14,165,233,0.9)',
+  //   neutral: 'rgba(148,163,184,0.9)'
+  // };
+
+  // const activityChartData = useMemo(() => {
+  //   const labels = stats.recentActivity.map(a => a._id).slice(-10);
+  //   const values = stats.recentActivity.map(a => a.count).slice(-10);
+  //   return {
+  //     labels,
+  //     datasets: [
+  //       {
+  //         label: 'Actions',
+  //         data: values,
+  //         fill: true,
+  //           tension: 0.35,
+  //           backgroundColor: chartColors.primaryLine,
+  //           borderColor: chartColors.primary,
+  //           pointBackgroundColor: chartColors.primary,
+  //           pointRadius: 4,
+  //           pointHoverRadius: 6
+  //       }
+  //     ]
+  //   };
+  // }, [stats.recentActivity]);
+
+  // const userRoleData = useMemo(() => ({
+  //   labels: ['Admins', 'Users'],
+  //   datasets: [
+  //     {
+  //       data: [stats.adminUsers, stats.standardUsers],
+  //       backgroundColor: [chartColors.info, chartColors.primary],
+  //       borderWidth: 0,
+  //       hoverOffset: 6
+  //     }
+  //   ]
+  // }), [stats]);
+
+  // const activeUserData = useMemo(() => ({
+  //   labels: ['Active', 'Inactive'],
+  //   datasets: [
+  //     {
+  //       label: 'Users',
+  //       data: [stats.activeUsers, stats.inactiveUsers],
+  //       backgroundColor: [chartColors.success, chartColors.warning],
+  //       borderRadius: 6,
+  //       maxBarThickness: 42
+  //     }
+  //   ]
+  // }), [stats]);
+
+  // const baseOptions = {
+  //   responsive: true,
+  //   maintainAspectRatio: false,
+  //   plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+  //   scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { precision:0 } } }
+  // };
+
   if (loading) {
     return (
-      <div className="dashboard-loading">
-        <div className="spinner"></div>
-        <p>Loading dashboard...</p>
+      <div className="dashboard">
+        <div className="stats-grid kt-cards-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="kt-card">
+              <div className="kt-card-header"><div className="kt-skeleton line" style={{width:'60%'}}></div></div>
+              <div className="flex gap-12" style={{alignItems:'center'}}>
+                <div className="kt-skeleton" style={{width:54,height:54,borderRadius:14}}></div>
+                <div className="flex flex-col" style={{flex:1}}>
+                  <div className="kt-skeleton line" style={{height:32,width:'50%'}}></div>
+                  <div className="kt-skeleton line" style={{width:'30%'}}></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="kt-charts-grid" style={{marginTop:24}}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="kt-card">
+              <div className="kt-skeleton line" style={{width:'40%',marginBottom:12}}></div>
+              <div className="kt-skeleton" style={{height:260,borderRadius:12}}></div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="dashboard">
-      <div className="dashboard-header">
-        <h1>Dashboard</h1>
-        <p>Welcome back, {user?.name}! Here's your system overview.</p>
+      <div style={{marginBottom:'16px'}}>
+        <h1 style={{fontSize:'18px', fontWeight:'700', color:'var(--kt-text)', marginBottom:'4px'}}>Dashboard</h1>
+        <p style={{color:'var(--kt-text-soft)', fontSize:'13px'}}>Welcome back, {user?.name}!</p>
       </div>
 
       <div className="stats-grid">
-        <StatCard
-          title="Total Users"
-          value={stats.totalUsers}
-          icon="👥"
-          color="blue"
-        />
-        <StatCard
-          title="Active Users"
-          value={stats.activeUsers}
-          icon="✅"
-          color="green"
-        />
-        <StatCard
-          title="Models"
-          value={stats.totalModels}
-          icon="🎯"
-          color="purple"
-        />
-        <StatCard
-          title="System Status"
-          value="Online"
-          icon="🟢"
-          color="emerald"
-        />
+        <StatCard title="Total Users" value={stats.totalUsers} icon="👥" />
+        <StatCard title="Active Users" value={stats.activeUsers} icon="✅" />
+        <StatCard title="Inactive Users" value={stats.inactiveUsers} icon="⏸" />
+        <StatCard title="Admins" value={stats.adminUsers} icon="🛡" />
+        <StatCard title="Standard Users" value={stats.standardUsers} icon="🧑" />
+        <StatCard title="Models" value={stats.totalModels} icon="🎯" />
       </div>
 
-      <div className="dashboard-content">
-        <div className="dashboard-section">
-          <h2>Recent Activity</h2>
-          <div className="activity-list">
-            {stats.recentActivity.length > 0 ? (
-              stats.recentActivity.slice(0, 5).map((activity, index) => (
-                <div key={index} className="activity-item">
-                  <div className="activity-icon">📊</div>
-                  <div className="activity-content">
-                    <div className="activity-title">
-                      {activity._id} - {activity.count} actions
-                    </div>
-                    <div className="activity-time">Recent activity</div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="no-activity">
-                <span>📝</span>
-                <p>No recent activity</p>
-              </div>
-            )}
+      <div className="kt-charts-grid">
+        <div className="kt-card">
+          <div className="kt-chart-title">📈 Activity</div>
+          <div style={{height:'120px', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--kt-surface-alt)', borderRadius:'6px', color:'var(--kt-text-soft)'}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:'24px', marginBottom:'4px'}}>📊</div>
+              <div style={{fontSize:'12px', fontWeight:'500'}}>Chart disabled</div>
+            </div>
           </div>
         </div>
-
-        <div className="dashboard-section">
-          <h2>Quick Actions</h2>
-          <div className="quick-actions">
-            <button 
-              className="action-btn primary"
-              onClick={() => window.location.href = '/admin/users'}
-            >
-              <span>👥</span>
-              Manage Users
-            </button>
-            <button 
-              className="action-btn secondary"
-              onClick={() => window.location.href = '/admin/models'}
-            >
-              <span>🎯</span>
-              Manage Models
-            </button>
-            <button 
-              className="action-btn tertiary"
-              onClick={fetchDashboardStats}
-            >
-              <span>🔄</span>
-              Refresh Data
-            </button>
+        <div className="kt-card">
+          <div className="kt-chart-title">🧩 User Roles</div>
+          <div style={{height:'120px', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--kt-surface-alt)', borderRadius:'6px', color:'var(--kt-text-soft)'}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:'24px', marginBottom:'4px'}}>🔵</div>
+              <div style={{fontSize:'13px', fontWeight:'600', marginBottom:'2px'}}>Admins: {stats.adminUsers}</div>
+              <div style={{fontSize:'13px', fontWeight:'600'}}>Users: {stats.standardUsers}</div>
+            </div>
           </div>
+        </div>
+        <div className="kt-card">
+          <div className="kt-chart-title">👥 Status</div>
+          <div style={{height:'120px', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--kt-surface-alt)', borderRadius:'6px', color:'var(--kt-text-soft)'}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:'24px', marginBottom:'4px'}}>📊</div>
+              <div style={{fontSize:'13px', fontWeight:'600', marginBottom:'2px'}}>Active: {stats.activeUsers}</div>
+              <div style={{fontSize:'13px', fontWeight:'600'}}>Inactive: {stats.inactiveUsers}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="kt-card">
+        <div style={{fontSize:'12px', fontWeight:'600', color:'var(--kt-text-soft)', marginBottom:'12px'}}>🎯 Quick Actions</div>
+        <div style={{display:'flex', gap:'8px', flexWrap:'wrap'}}>
+          <button className="kt-btn primary sm" onClick={() => window.location.href = '/admin/users'}>👥 Manage Users</button>
+          <button className="kt-btn info sm" onClick={() => window.location.href = '/admin/models'}>🧩 Model Management</button>
+          <button className="kt-btn outline sm" onClick={fetchDashboardStats}>🔄 Refresh Dashboard</button>
         </div>
       </div>
     </div>

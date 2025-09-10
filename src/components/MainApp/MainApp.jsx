@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Experience } from "../Experience/Experience.jsx";
 import { Interface } from "../Interface/Interface.jsx";
@@ -7,10 +7,82 @@ import { useAuth } from "../../context/AuthContext";
 import { ActivityLog } from "../ActivityLog/ActivityLog";
 import './MainApp.css';
 
+const API_BASE_URL = 'http://localhost:5000';
+
 function MainApp() {
   const { user, logout } = useAuth();
+  const [dbModels, setDbModels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Fetch models from database
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/models`);
+        
+        if (response.ok) {
+          const models = await response.json();
+          setDbModels(models);
+        } else {
+          console.error('Failed to fetch models:', response.statusText);
+        }
+      } catch (err) {
+        console.error('Error fetching models:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchModels();
+  }, []);
+
+  // Listen for model updates from admin panel
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/models`);
+        if (response.ok) {
+          const models = await response.json();
+          setDbModels(models);
+        }
+      } catch (err) {
+        console.error('Error refreshing models:', err);
+      }
+    };
+    
+    window.addEventListener('modelsUpdated', handler);
+    return () => window.removeEventListener('modelsUpdated', handler);
+  }, []);
+
+  // Convert database models to the format expected by Experience component
+  const dbModelsFormatted = useMemo(() => {
+    const formatted = {};
+    dbModels.forEach(model => {
+      console.log('Processing model:', model.name, 'metadata:', model.metadata);
+      formatted[model.name] = {
+        path: model.file,
+        displayName: model.displayName,
+        type: model.type,
+        interactionGroups: model.interactionGroups || [],
+        metadata: model.metadata || {},
+        // Extract uiWidgets from metadata to top level
+        uiWidgets: model.metadata?.uiWidgets || [],
+        // Extract other metadata properties that might be needed
+        lights: model.metadata?.lights || [],
+        hiddenInitially: model.metadata?.hiddenInitially || [],
+        camera: model.metadata?.camera || { position: [0, 2, 5], target: [0, 1, 0], fov: 50 }
+      };
+      console.log('Formatted model:', formatted[model.name]);
+    });
+    console.log('DB MODELS FORMATTED:', formatted); // Debug log
+    return formatted;
+  }, [dbModels]);
+
+  const mergedModels = useMemo(() => ({ ...modelsConfig, ...dbModelsFormatted }), [dbModelsFormatted]);
+
   const [selectedModel, setSelectedModel] = useState(() => {
     const saved = localStorage.getItem('selectedModel');
+    // Check if saved model exists in static config first, then check if it will exist in merged models
     return saved && modelsConfig[saved] ? saved : "Undercounter";
   });
   const [api, setApi] = useState(null);
@@ -31,8 +103,8 @@ function MainApp() {
   // Effects/Materials states
   const [reflectionActive, setReflectionActive] = useState(false);
 
-  // Get current model configuration
-  const currentModel = modelsConfig[selectedModel] || modelsConfig["Undercounter"];
+  // Get current model configuration from merged set
+  const currentModel = mergedModels[selectedModel] || mergedModels["Undercounter"];
 
   // User permissions
   const userPermissions = user?.permissions || {};
@@ -73,9 +145,9 @@ function MainApp() {
 
   // Model change handler
   const handleModelChange = useCallback((modelName) => {
-    setSelectedModel(modelName);
-    localStorage.setItem('selectedModel', modelName);
-    logActivity("model_change", { from: selectedModel, to: modelName });
+  setSelectedModel(modelName);
+  try { localStorage.setItem('selectedModel', modelName); } catch(_) {}
+  logActivity("model_change", { from: selectedModel, to: modelName });
   }, [selectedModel, logActivity]);
 
   // Toggle part function
@@ -86,38 +158,21 @@ function MainApp() {
     }
   }, [logActivity]);
 
-  return (
-    <div className="main-app">
-      <div className="app-header">
-        <div className="header-left">
-          <h1>3D Configurator</h1>
-          <select
-            className="model-select"
-            value={selectedModel}
-            onChange={(e) => handleModelChange(e.target.value)}
-            title="Select Model"
-          >
-            {Object.keys(modelsConfig).map((key) => (
-              <option key={key} value={key}>{key}</option>
-            ))}
-          </select>
-        </div>
-        <div className="user-info">
-          <span>Welcome, {user?.name}</span>
-          {user?.role === 'admin' && (
-            <button 
-              className="admin-btn"
-              onClick={() => window.location.href = '/admin/dashboard'}
-            >
-              Admin Panel
-            </button>
-          )}
-          <button className="logout-btn" onClick={logout}>
-            Logout
-          </button>
+  if (loading) {
+    return (
+      <div className="main-app">
+        <div className="app-content">
+          <div className="loading-state">
+            <h2>Loading models...</h2>
+            <p>Fetching available 3D models from server</p>
+          </div>
         </div>
       </div>
+    );
+  }
 
+  return (
+    <div className="main-app">
       <div className="app-content">
         <div className="canvas-container">
           <Canvas
@@ -129,6 +184,8 @@ function MainApp() {
           >
             <Experience
               modelName={selectedModel}
+              modelConfig={currentModel}
+              allModels={mergedModels}
               onTogglePart={togglePart}
               onApiReady={setApi}
               applyRequest={applyRequest}
@@ -140,10 +197,14 @@ function MainApp() {
 
         <Interface
           selectedModel={selectedModel}
+          onModelChange={handleModelChange}
+          onLogout={logout}
+          userName={user?.name}
           togglePart={togglePart}
           api={api}
           applyRequest={applyRequest}
           userPermissions={userPermissions}
+          models={mergedModels}
         />
       </div>
 

@@ -7,29 +7,7 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-.app-header {
-  background: rgba(255, 255, 255, 0.95);
-  padding: 12px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #e5e7eb;
-  backdrop-filter: blur(10px);
-  z-index: 100;
-}
-
-.header-left {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.app-header h1 {
-  margin: 0;
-  color: #1f2937;
-  font-size: 20px;
-  font-weight: 600;
-}
+/* Header removed; layout now full height split */
 
 .model-select {
   appearance: none;
@@ -50,18 +28,7 @@
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
-.user-info {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  color: #6b7280;
-  background: #475569;
-  color: #e2e8f0;
-  padding: 6px 12px;
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08);
-}
+/* User pill removed */
 
 .admin-btn,
 .logout-btn {
@@ -103,13 +70,71 @@
   display: flex;
   position: relative;
   overflow: hidden; /* keep page from scrolling when sidebar overflows */
+  align-items: stretch;
 }
 
 .canvas-container {
-  flex: 1;
+  flex: 3 1 0;
   position: relative;
   min-width: 0; /* allow flex item to shrink without causing overflow */
   height: 100%;
+  background: #0f1115;
+  border-right: 1px solid #1f2937;
+}
+
+/* Sidebar wrapper (Interface root uses fixed/flex basis but we ensure flex ratio) */
+.interface-container {
+  flex: 1 1 0 !important;
+  max-width: 480px;
+  min-width: 300px;
+  border-left: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+/* Tighten header buttons */
+.user-info {
+  background: #475569;
+  padding: 4px 10px;
+  gap: 8px;
+}
+
+.admin-btn,
+.logout-btn {
+  padding: 6px 10px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+
+.model-select {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+/* Prevent huge growth if viewport super wide */
+@media (min-width: 2000px) {
+  .canvas-container { flex: 3 1 0; }
+  .interface-container { max-width: 520px; }
+}
+
+/* Medium breakpoint: keep split but reduce sidebar width */
+@media (max-width: 1200px) {
+  .interface-container { max-width: 400px; }
+}
+
+/* Tablet & below: stack with interface below canvas */
+@media (max-width: 900px) {
+  .app-content { flex-direction: column; }
+  .canvas-container { flex: none; height: 55%; border-right: none; border-bottom: 1px solid #1f2937; }
+  .interface-container { flex: none !important; width: 100% !important; max-width: 100%; height: 45%; }
+}
+
+/* Small phones: full height toggle style (simple) */
+@media (max-width: 540px) {
+  .canvas-container { height: 50%; }
+  .interface-container { height: 50%; }
+  .app-header { padding: 8px 12px; }
+  .app-header h1 { font-size: 16px; }
+  .user-info { font-size: 12px; }
 }
 
 .app-loading {
@@ -138,24 +163,4 @@
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-  .app-header {
-    padding: 8px 16px;
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .header-left {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .app-header h1 {
-    font-size: 18px;
-  }
-  
-  .user-info {
-    font-size: 12px;
-    gap: 8px;
-  }
-}
+@media (max-width: 768px) { /* header removed - keep placeholder for future */ }

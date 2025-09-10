@@ -2,18 +2,25 @@
 import * as THREE from "three";
 import React, { Suspense, useRef, useEffect, useState, useCallback } from "react";
 import { useThree } from "@react-three/fiber";
-import { Environment, OrbitControls, useGLTF } from "@react-three/drei";
-import { modelsConfig } from "../../modelsConfig";
+import { Environment, OrbitControls, useGLTF, Html } from "@react-three/drei";
+import { modelsConfig } from "../../modelsConfig"; // fallback
 import { useInteractions } from "./hooks/useInteractions";
 import { logActivity } from "../../api/user";
 
-export function Experience({ modelName, onTogglePart, onApiReady, applyRequest, userPermissions, user }) {
-  const config = modelsConfig[modelName];
+export function Experience({ modelName, modelConfig, allModels, onTogglePart, onApiReady, applyRequest, userPermissions, user, onModelError }) {
+  // Prefer provided modelConfig/allModels (supports dynamic custom models) and fallback to static modelsConfig
+  const config = modelConfig || (allModels && allModels[modelName]) || modelsConfig[modelName];
   
   // Guard against undefined config
   if (!config) {
     console.error(`Model configuration not found for: ${modelName}`);
     return <mesh><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color="red" /></mesh>;
+  }
+
+  // Guard against invalid model paths
+  if (config.path && config.path.includes('blob:')) {
+    console.warn(`Skipping blob URL model: ${modelName}`);
+    return <mesh><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color="yellow" /></mesh>;
   }
   
   const { camera, gl } = useThree();
@@ -22,12 +29,27 @@ export function Experience({ modelName, onTogglePart, onApiReady, applyRequest, 
   const allObjects = useRef({});
   const clickHelpers = useRef(new Map());
 
-  // Load model(s)
+  // Load model(s) - hooks must be called unconditionally
   const baseScene = config.assets?.base ? useGLTF(config.assets.base)?.scene : null;
   const doorsScene = config.assets?.doors ? useGLTF(config.assets.doors)?.scene : null;
   const glassDoorsScene = config.assets?.glassDoors ? useGLTF(config.assets.glassDoors)?.scene : null;
   const drawersScene = config.assets?.drawers ? useGLTF(config.assets.drawers)?.scene : null;
   const { scene } = !config.assets ? useGLTF(config.path) : { scene: null };
+
+  // Error boundary effect to detect failed model loads
+  useEffect(() => {
+    const errorHandler = (event) => {
+      if (event.target.src && event.target.src.includes('/models/')) {
+        console.error(`Model loading failed: ${modelName}`, event.target.src);
+        if (onModelError && modelName !== 'Undercounter') {
+          onModelError(modelName);
+        }
+      }
+    };
+
+    window.addEventListener('error', errorHandler, true);
+    return () => window.removeEventListener('error', errorHandler, true);
+  }, [modelName, onModelError]);
 
   // Activity logging function
   const logInteraction = useCallback(async (action, details = {}) => {
@@ -280,10 +302,26 @@ export function Experience({ modelName, onTogglePart, onApiReady, applyRequest, 
       });
     });
 
-    console.log("🎨 Materials found in model:", Array.from(materials));
-
     // existing initialization: set base visible
     if (baseScene) baseScene.traverse((o) => (o.visible = true));
+
+    // Debug: Log all object names in the scene
+    console.log(`🔍 MODEL DEBUG for "${modelName}":`);
+    console.log('📦 All objects found:', Object.keys(allObjects.current));
+    
+    // Debug: Check interaction groups vs actual objects
+    if (Array.isArray(config.interactionGroups)) {
+      console.log('⚙️ Interaction Groups:');
+      config.interactionGroups.forEach((group, i) => {
+        console.log(`  Group ${i}: ${group.type} - ${group.label}`);
+        if (Array.isArray(group.parts)) {
+          group.parts.forEach(part => {
+            const exists = allObjects.current[part.name] ? '✅' : '❌';
+            console.log(`    ${exists} ${part.name} (${part.rotationAxis || part.positionAxis || 'no axis'})`);
+          });
+        }
+      });
+    }
 
     // hiddenInitially
     if (Array.isArray(config.hiddenInitially)) {
@@ -523,7 +561,6 @@ export function Experience({ modelName, onTogglePart, onApiReady, applyRequest, 
     };
 
     if (onApiReady) onApiReady(api);
-    console.log("✅ Experience API ready:", Object.keys(api));
 
     // Wire the applyRequest ref so UI can call:
     if (applyRequest) {
@@ -635,14 +672,23 @@ export function Experience({ modelName, onTogglePart, onApiReady, applyRequest, 
       cur = cur.parent;
     }
 
+    console.log('🖱️ CLICK DEBUG:');
+    console.log('  Clicked object:', picked.name);
+    console.log('  Hierarchy names:', hierarchyNames);
+
     const interactiveObject = hierarchyNames.find((n) => {
       const obj = allObjects.current[n];
-      return obj && obj.visible && isInteractiveObject(n);
+      const isInteractive = obj && obj.visible && isInteractiveObject(n);
+      console.log(`  Checking ${n}: exists=${!!obj}, visible=${obj?.visible}, interactive=${isInteractive}`);
+      return isInteractive;
     });
 
     if (interactiveObject) {
+      console.log(`✅ Found interactive object: ${interactiveObject}`);
       togglePart(interactiveObject, "auto");
       e.stopPropagation();
+    } else {
+      console.log('❌ No interactive object found in hierarchy');
     }
   };
 
