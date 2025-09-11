@@ -59,6 +59,12 @@ function MainApp() {
     const formatted = {};
     dbModels.forEach(model => {
       console.log('Processing model:', model.name, 'metadata:', model.metadata);
+      console.log('↘ transform from API:', {
+        placementMode: model.placementMode,
+        modelPosition: model.modelPosition,
+        modelRotation: model.modelRotation,
+        modelScale: model.modelScale
+      });
       formatted[model.name] = {
         path: model.file,
         displayName: model.displayName,
@@ -70,9 +76,14 @@ function MainApp() {
         // Extract other metadata properties that might be needed
         lights: model.metadata?.lights || [],
         hiddenInitially: model.metadata?.hiddenInitially || [],
-        camera: model.metadata?.camera || { position: [0, 2, 5], target: [0, 1, 0], fov: 50 }
+        camera: model.metadata?.camera || { position: [0, 2, 5], target: [0, 1, 0], fov: 50 },
+        // Extract model positioning from database model
+  placementMode: model.placementMode || 'autofit',
+  modelPosition: Array.isArray(model.modelPosition) ? model.modelPosition : undefined,
+  modelRotation: Array.isArray(model.modelRotation) ? model.modelRotation : undefined,
+  modelScale: typeof model.modelScale === 'number' ? model.modelScale : undefined
       };
-      console.log('Formatted model:', formatted[model.name]);
+  console.log('Formatted model:', formatted[model.name]);
     });
     console.log('DB MODELS FORMATTED:', formatted); // Debug log
     return formatted;
@@ -97,8 +108,7 @@ function MainApp() {
   const [enableMovement, setEnableMovement] = useState(false);
 
   // Model positioning states
-  const [position, setPosition] = useState([0, 0, 0]);
-  const [rotation, setRotation] = useState([0, 0, 0]);
+  // Deprecated manual transform state removed
 
   // Effects/Materials states
   const [reflectionActive, setReflectionActive] = useState(false);
@@ -111,13 +121,11 @@ function MainApp() {
 
   // Update position when changing models
   useEffect(() => {
-    if (currentModel?.modelPosition) {
-      setPosition(currentModel.modelPosition);
-    }
-    if (currentModel?.modelRotation) {
-      setRotation(currentModel.modelRotation);
-    }
+    console.log('🔄 Current model changed:', currentModel);
   }, [selectedModel, currentModel]);
+
+  // Model transform change handler
+  const handleModelTransformChange = useCallback(() => {}, []);
 
   // Log activity function
   const logActivity = useCallback(async (action, details = {}) => {
@@ -191,6 +199,7 @@ function MainApp() {
               applyRequest={applyRequest}
               userPermissions={userPermissions}
               user={user}
+              onModelTransformChange={handleModelTransformChange}
             />
           </Canvas>
         </div>

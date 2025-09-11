@@ -1,0 +1,188 @@
+.saved-configs-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.empty-state p {
+  margin: 10px 0;
+}
+
+.configs-list {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.config-item {
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.config-item:hover {
+  border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+}
+
+.config-item.selected {
+  border-color: #007bff;
+  background: #f8f9ff;
+  box-shadow: 0 2px 12px rgba(0, 123, 255, 0.15);
+}
+
+.config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.config-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1.1em;
+}
+
+.config-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-load,
+.btn-delete {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-load {
+  background: #28a745;
+  color: white;
+}
+
+.btn-load:hover {
+  background: #218838;
+}
+
+.btn-delete {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #c82333;
+}
+
+.config-details {
+  font-size: 14px;
+}
+
+.config-model {
+  color: #666;
+  margin: 8px 0;
+}
+
+.config-description {
+  color: #555;
+  font-style: italic;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.config-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.config-date {
+  font-size: 12px;
+  color: #999;
+}
+
+.config-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  background: #007bff;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.public-badge {
+  background: #17a2b8;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 8px;
+  display: inline-block;
+}
+
+.config-preview {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f0f7ff;
+  border-radius: 6px;
+  border-left: 4px solid #007bff;
+}
+
+.config-preview h5 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: #333;
+}
+
+.config-summary {
+  font-size: 12px;
+  color: #666;
+}
+
+.config-summary p {
+  margin: 4px 0;
+  padding: 4px 8px;
+  background: white;
+  border-radius: 3px;
+}
+
+.modal-footer .btn-primary {
+  background: #28a745;
+}
+
+.modal-footer .btn-primary:hover {
+  background: #218838;
+}

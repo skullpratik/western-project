@@ -755,15 +755,58 @@
 }
 
 /* Camera Configuration Grid */
-.camera-grid {
+.camera-grid,
+.model-position-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 16px;
   margin-top: 16px;
 }
 
+.model-position-presets {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.model-position-presets h5 {
+  margin: 0 0 12px 0;
+  color: #4a5568;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.preset-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.preset-buttons-grid .preset-btn {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.preset-buttons-grid .preset-btn:hover {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
 @media (max-width: 768px) {
-  .camera-grid {
+  .camera-grid,
+  .model-position-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .preset-buttons-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }

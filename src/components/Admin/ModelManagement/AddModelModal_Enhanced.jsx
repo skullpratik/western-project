@@ -7,7 +7,10 @@ const emptyState = {
   selectedFile: null,
   assets: { base: '', doors: '', glassDoors: '', drawers: '' },
   useAssets: false,
-  camera: { position: '0,2,5', target: '0,1,0', fov: '50' },
+  placementMode: 'autofit',
+  modelPosition: '0,0,0',
+  modelRotation: '0,0,0',
+  modelScale: '1',
   hidden: '',
   lights: [],
   lightDraft: { name:'', defaultState:'on', intensity:'5' },
@@ -64,11 +67,10 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
         selectedFile: null, // Don't include file for editing
         assets: editModel.assets || { base: '', doors: '', glassDoors: '', drawers: '' },
         useAssets: !!(editModel.assets?.base || editModel.assets?.doors || editModel.assets?.glassDoors || editModel.assets?.drawers),
-        camera: {
-          position: editModel.camera?.position ? (Array.isArray(editModel.camera.position) ? editModel.camera.position.join(',') : editModel.camera.position) : '0,2,5',
-          target: editModel.camera?.target ? (Array.isArray(editModel.camera.target) ? editModel.camera.target.join(',') : editModel.camera.target) : '0,1,0',
-          fov: editModel.camera?.fov?.toString() || '50'
-        },
+  placementMode: editModel.placementMode || 'autofit',
+  modelPosition: editModel.modelPosition ? (Array.isArray(editModel.modelPosition) ? editModel.modelPosition.join(',') : editModel.modelPosition) : '0,0,0',
+  modelRotation: editModel.modelRotation ? (Array.isArray(editModel.modelRotation) ? editModel.modelRotation.map(r => r * 180 / Math.PI).join(',') : editModel.modelRotation) : '0,0,0',
+  modelScale: (editModel.modelScale ?? 1).toString(),
         hidden: editModel.hiddenInitially?.join(', ') || '',
         lights: editModel.lights || [],
         lightDraft: { name:'', defaultState:'on', intensity:'5' },
@@ -304,18 +306,8 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
     if(state.rawMode) {
       try { return JSON.parse(state.rawJson); } catch { return null; }
     }
-    
-    // Parse camera values safely
-    const cameraPos = parseVec(state.camera.position);
-    const cameraTarget = parseVec(state.camera.target);
-    const cameraFov = parseFloat(state.camera.fov) || 50;
-    
-    if(cameraPos.length !== 3 || cameraTarget.length !== 3) { 
-      setFeedback({ type:'error', msg:'Camera position and target must have 3 numbers (X,Y,Z)' }); 
-      return null; 
-    }
-    
-    const cfg = {};
+
+    const cfg = { placementMode: state.placementMode };
     
     // Handle model path/assets
     if(state.useAssets) {
@@ -334,12 +326,13 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
       if(pathToUse) cfg.path = pathToUse;
     }
     
-    // Set camera configuration
-    cfg.camera = { 
-      position: cameraPos, 
-      target: cameraTarget, 
-      fov: cameraFov 
-    };
+  // Add model transform from admin inputs
+  const modelPos = parseVec(state.modelPosition);
+  const modelRot = parseVec(state.modelRotation).map(deg => deg * Math.PI / 180);
+  const modelScale = parseFloat(state.modelScale);
+  if (modelPos.length === 3) cfg.modelPosition = modelPos;
+  if (modelRot.length === 3) cfg.modelRotation = modelRot;
+  if (!Number.isNaN(modelScale) && modelScale > 0) cfg.modelScale = modelScale;
     
     // Handle hidden parts
     const hidden = state.hidden.split(/[,\n]/).map(s=>s.trim()).filter(Boolean);
@@ -647,53 +640,106 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
                 )}
               </div>
 
-              {/* Camera Settings Section */}
+              {/* Camera settings removed: unified camera, per-model placement handled below */}
+
+              {/* Model Position Settings Section */}
               <div className="form-section">
                 <div className="section-header">
-                  <h4>📷 Camera Configuration</h4>
-                  <p>Set up the default camera view for your model</p>
+                  <h4>🎯 Model Position Configuration</h4>
+                  <p>Set the default position, rotation, and scale for your model</p>
                 </div>
                 
-                <div className="camera-grid">
+                <div className="model-position-grid">
                   <div className="form-group">
-                    <label htmlFor="camera-position">Camera Position</label>
+                    <label htmlFor="model-position">Model Position</label>
                     <input 
-                      id="camera-position"
+                      id="model-position"
                       type="text"
-                      value={state.camera.position} 
-                      onChange={e=>update({ camera:{ ...state.camera, position:e.target.value } })}
-                      placeholder="0,2,5"
+                      value={state.modelPosition || '0,0,0'} 
+                      onChange={e=>update({ modelPosition: e.target.value })}
+                      placeholder="0,0,0"
                       className="form-input"
                     />
-                    <small className="help-text">X,Y,Z coordinates where camera is located</small>
+                    <small className="help-text">X,Y,Z coordinates for model placement</small>
                   </div>
                   
                   <div className="form-group">
-                    <label htmlFor="camera-target">Camera Target</label>
+                    <label htmlFor="model-rotation">Model Rotation</label>
                     <input 
-                      id="camera-target"
+                      id="model-rotation"
                       type="text"
-                      value={state.camera.target} 
-                      onChange={e=>update({ camera:{ ...state.camera, target:e.target.value } })}
-                      placeholder="0,1,0"
+                      value={state.modelRotation || '0,0,0'} 
+                      onChange={e=>update({ modelRotation: e.target.value })}
+                      placeholder="0,0,0"
                       className="form-input"
                     />
-                    <small className="help-text">X,Y,Z coordinates camera looks at</small>
+                    <small className="help-text">X,Y,Z rotation in degrees</small>
                   </div>
                   
                   <div className="form-group">
-                    <label htmlFor="camera-fov">Field of View</label>
+                    <label htmlFor="model-scale">Model Scale</label>
                     <input 
-                      id="camera-fov"
+                      id="model-scale"
                       type="number"
-                      value={state.camera.fov} 
-                      onChange={e=>update({ camera:{ ...state.camera, fov:e.target.value } })}
-                      placeholder="50"
-                      min="10"
-                      max="120"
+                      value={state.modelScale || 2} 
+                      onChange={e=>update({ modelScale: e.target.value })}
+                      placeholder="2"
+                      min="0.1"
+                      max="10"
+                      step="0.1"
                       className="form-input"
                     />
-                    <small className="help-text">Viewing angle in degrees (10-120)</small>
+                    <small className="help-text">Scale multiplier (1.0 = original size)</small>
+                  </div>
+                </div>
+                
+                <div className="model-position-presets">
+                  <h5>Quick Position Presets</h5>
+                  <div className="preset-buttons-grid">
+                    <button 
+                      type="button" 
+                      className="preset-btn"
+                      onClick={() => update({ 
+                        modelPosition: '0,0,0', 
+                        modelRotation: '0,0,0', 
+                        modelScale: '2' 
+                      })}
+                    >
+                      Center Default
+                    </button>
+                    <button 
+                      type="button" 
+                      className="preset-btn"
+                      onClick={() => update({ 
+                        modelPosition: '0,-1,0', 
+                        modelRotation: '0,0,0', 
+                        modelScale: '1.5' 
+                      })}
+                    >
+                      Ground Level
+                    </button>
+                    <button 
+                      type="button" 
+                      className="preset-btn"
+                      onClick={() => update({ 
+                        modelPosition: '0,0,0', 
+                        modelRotation: '0,45,0', 
+                        modelScale: '2' 
+                      })}
+                    >
+                      Angled View
+                    </button>
+                    <button 
+                      type="button" 
+                      className="preset-btn"
+                      onClick={() => update({ 
+                        modelPosition: '0,0,0', 
+                        modelRotation: '0,0,0', 
+                        modelScale: '3' 
+                      })}
+                    >
+                      Large Scale
+                    </button>
                   </div>
                 </div>
               </div>

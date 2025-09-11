@@ -45,14 +45,15 @@ const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
                 ✏️
               </button>
               <button 
-                className="btn-danger-small" 
+                className={`btn-danger-small`}
+                disabled={showDeleteConfirm}
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowDeleteConfirm(true);
                 }}
                 title="Delete model"
               >
-                🗑️
+                {showDeleteConfirm ? '…' : '🗑️'}
               </button>
             </>
           )}
@@ -179,11 +180,12 @@ const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
               <button 
                 className="btn-danger" 
                 onClick={() => {
-                  onDelete(config.id, modelName);
+                  if (!config.id && !config._id) return;
+                  onDelete(config.id || config._id, modelName);
                   setShowDeleteConfirm(false);
                 }}
               >
-                Delete Model
+                Delete
               </button>
             </div>
           </div>
@@ -352,11 +354,15 @@ const ModelManagement = () => {
     }
   };
 
+  const [deletingIds, setDeletingIds] = useState(new Set());
   const handleDeleteModel = async (modelId, modelName) => {
+    if (!modelId) return;
+    // Optimistic update: remove immediately to avoid flicker
+    setDeletingIds(prev => new Set([...prev, modelId]));
+    const previous = dbModels;
+    setDbModels(models => models.filter(m => m.id !== modelId && m._id !== modelId));
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/api/admin/models/${modelId}`, {
         method: 'DELETE',
@@ -365,35 +371,20 @@ const ModelManagement = () => {
           'Content-Type': 'application/json'
         }
       });
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || 'Failed to delete model');
       }
-
-      // Refresh the models list
-      const refreshResponse = await fetch(`${API_BASE_URL}/api/admin/models`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (refreshResponse.ok) {
-        const models = await refreshResponse.json();
-        setDbModels(models);
-        
-        // Fire event so MainApp can refresh
-        window.dispatchEvent(new Event('modelsUpdated'));
-        
-        console.log(`Model "${modelName}" deleted successfully`);
-      }
-      
+      // Notify other parts of app
+      window.dispatchEvent(new Event('modelsUpdated'));
+      console.log(`✅ Model "${modelName}" deleted`);
     } catch (err) {
       console.error('Error deleting model:', err);
       setError(`Failed to delete model: ${err.message}`);
+      // Revert optimistic removal
+      setDbModels(previous);
     } finally {
-      setLoading(false);
+      setDeletingIds(prev => { const n = new Set(prev); n.delete(modelId); return n; });
     }
   };
 

@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { widgetRegistry } from './widgets/index.jsx';
+import SaveConfigModal from './SaveConfigModal.jsx';
+import SavedConfigsList from './SavedConfigsList.jsx';
 import './Interface.css';
 
 export function Interface({
@@ -14,9 +16,67 @@ export function Interface({
   userPermissions,
   models = {}, // merged models map passed from MainApp
 }) {
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showConfigsList, setShowConfigsList] = useState(false);
+  const [currentModelTransform, setCurrentModelTransform] = useState({
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: 2
+  });
+
   // Current model config from provided map
   const config = models[selectedModel] || {};
   const allWidgets = config.uiWidgets || [];
+
+  // Function to capture current model state
+  const captureCurrentState = () => {
+    if (!api?.getCurrentState) {
+      console.warn('API getCurrentState not available');
+      return {};
+    }
+
+    return api.getCurrentState();
+  };
+
+  // Function to save configuration
+  const handleSaveConfig = async (configData) => {
+    try {
+      const currentState = captureCurrentState();
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/configs/save', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...configData,
+          configData: currentState
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save configuration');
+      }
+
+      alert('Configuration saved successfully!');
+    } catch (error) {
+      console.error('Error saving configuration:', error);
+      throw error;
+    }
+  };
+
+  // Function to load configuration
+  const handleLoadConfig = (configData) => {
+    if (!api?.loadState) {
+      console.warn('API loadState not available');
+      return;
+    }
+
+    api.loadState(configData);
+    alert('Configuration loaded successfully!');
+  };
   
   console.log('=== INTERFACE DEBUG ===');
   console.log('Selected Model:', selectedModel);
@@ -65,6 +125,7 @@ export function Interface({
       textureWidget: 'textureWidget',
       lightWidget: 'lightWidget',
       saveConfig: 'saveConfig',
+      modelPosition: 'canMove',
     };
     return permissionMap[widgetType] || 'canRead';
   };
@@ -144,19 +205,33 @@ export function Interface({
         {widgets.map((widget, index) => renderWidget(widget, index))}
       </div>
 
-      {/* Quick Actions - Save Config Widget Only */}
-      {hasPermission('saveConfig') && (
+      {/* Model Position Controls */}
+
+      {/* Configuration Manager */}
+      {hasPermission('canEdit') && (
         <div className="widget-container save-config-widget">
-          <h4 className="widget-title">🎯 Quick Actions</h4>
-          <button 
-            className="btn btn-primary save-config-btn"
-            onClick={() => api?.saveConfiguration?.()}
-            disabled={!hasPermission('saveConfig')}
-          >
-            � Save Config
-          </button>
+          <h4 className="widget-title">💾 Configuration Manager</h4>
+          
+          <div className="config-buttons">
+            <button 
+              className="btn btn-primary save-config-btn"
+              onClick={() => setShowSaveModal(true)}
+            >
+              💾 Save Current Config
+            </button>
+            
+            <button 
+              className="btn btn-secondary load-config-btn"
+              onClick={() => setShowConfigsList(true)}
+            >
+              📋 Load Saved Config
+            </button>
+          </div>
+          
           <div className="save-config-info">
-            <span className="info-text">Save current model configuration</span>
+            <span className="info-text">
+              Save your current configuration or load a previously saved one
+            </span>
           </div>
         </div>
       )}
@@ -179,6 +254,23 @@ export function Interface({
           </div>
         </div>
       </div>
+
+      {/* Save Configuration Modal */}
+      <SaveConfigModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        onSave={handleSaveConfig}
+        currentConfig={showSaveModal ? captureCurrentState() : {}}
+        modelName={selectedModel}
+      />
+
+      {/* Saved Configurations List Modal */}
+      <SavedConfigsList
+        isOpen={showConfigsList}
+        onClose={() => setShowConfigsList(false)}
+        onLoad={handleLoadConfig}
+        modelName={selectedModel}
+      />
     </div>
   );
 }
