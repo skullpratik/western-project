@@ -26,7 +26,38 @@ export function Interface({
 
   // Current model config from provided map
   const config = models[selectedModel] || {};
-  const allWidgets = config.uiWidgets || [];
+  const allWidgets = React.useMemo(() => {
+    const rawWidgets = config.uiWidgets || [];
+    
+    console.log(`🔍 INTERFACE WIDGET FILTERING DEBUG:`);
+    console.log(`  - selectedModel: ${selectedModel}`);
+    console.log(`  - rawWidgets.length: ${rawWidgets.length}`);
+    console.log(`  - rawWidgets:`, rawWidgets);
+    
+    // Log each raw widget
+    rawWidgets.forEach((widget, i) => {
+      console.log(`    [${i}] ${widget.type} - "${widget.title}" - mesh: ${widget.meshName}`);
+    });
+    
+    // Remove duplicate light widgets (keep only the first one for each mesh)
+    const seenLightMeshes = new Set();
+    const uniqueWidgets = rawWidgets.filter((widget, index) => {
+      if (widget.type === 'lightWidget') {
+        if (seenLightMeshes.has(widget.meshName)) {
+          console.log(`🧹 Interface: REMOVING duplicate light widget [${index}]: "${widget.title}" for mesh: ${widget.meshName}`);
+          return false; // Remove duplicate
+        }
+        seenLightMeshes.add(widget.meshName);
+        console.log(`✅ Interface: KEEPING light widget [${index}]: "${widget.title}" for mesh: ${widget.meshName}`);
+      }
+      return true; // Keep widget
+    });
+    
+    console.log(`🧹 Interface: Filtered ${rawWidgets.length} widgets to ${uniqueWidgets.length} unique widgets`);
+    console.log(`  - Final uniqueWidgets:`, uniqueWidgets);
+    
+    return uniqueWidgets;
+  }, [config.uiWidgets, selectedModel]);
 
   // Enhanced widget debugging
   React.useEffect(() => {

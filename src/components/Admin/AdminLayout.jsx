@@ -4,6 +4,8 @@ import Sidebar from './Sidebar';
 import Dashboard from './Dashboard/Dashboard';
 import UserManagement from './UserManagement/UserManagement';
 import ModelManagement from './ModelManagement/ModelManagement';
+import ModelWizard from './ModelManagement/ModelWizard';
+import ModelConfigGenerator from './ModelConfigGenerator';
 import UserPreview from './UserPreview/UserPreview';
 import { useAuth } from '../../context/AuthContext';
 import './admin-theme.css';
@@ -42,6 +44,7 @@ const AdminShell = () => {
     '/admin/dashboard': 'Dashboard',
     '/admin/users': 'User Management',
     '/admin/models': 'Model Management',
+    '/admin/models/generator': 'Model Generator',
     '/admin/user-preview': 'User-Preview'
   };
   const pageTitle = pathMap[location.pathname] || 'Dashboard';
@@ -67,6 +70,8 @@ const AdminShell = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/models" element={<ModelManagement />} />
+            <Route path="/models/wizard" element={<ModelWizard />} />
+            <Route path="/models/generator" element={<ModelConfigGenerator />} />
             <Route path="/user-preview" element={<UserPreview />} />
           </Routes>
         </div>

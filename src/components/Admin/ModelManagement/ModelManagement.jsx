@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGLTF } from '@react-three/drei';
 import AddModelModalEnhanced from './AddModelModal_Enhanced';
 import { modelsConfig } from '../../../modelsConfig';
@@ -8,7 +9,6 @@ const API_BASE_URL = 'http://localhost:5000';
 
 const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
   const [open, setOpen] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const presetSummary = useMemo(() => {
     if (!config.presets?.doorSelections) return null;
@@ -46,14 +46,13 @@ const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
               </button>
               <button 
                 className={`btn-danger-small`}
-                disabled={showDeleteConfirm}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowDeleteConfirm(true);
+                  onDelete(config.id || config._id, modelName);
                 }}
                 title="Delete model"
               >
-                {showDeleteConfirm ? '…' : '🗑️'}
+                🗑️
               </button>
             </>
           )}
@@ -162,46 +161,22 @@ const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
           </div>
         )}
       </div>
-      
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Delete Model</h3>
-            <p>Are you sure you want to delete <strong>{modelName}</strong>?</p>
-            <p className="warning-text">This action cannot be undone and will remove the model file from the server.</p>
-            <div className="modal-actions">
-              <button 
-                className="btn-secondary" 
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button 
-                className="btn-danger" 
-                onClick={() => {
-                  if (!config.id && !config._id) return;
-                  onDelete(config.id || config._id, modelName);
-                  setShowDeleteConfirm(false);
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
 const ModelManagement = () => {
   const [dbModels, setDbModels] = useState([]);
+  const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editModel, setEditModel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Delete confirmation modal state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // {id, name}
 
   // Fetch models from database
   useEffect(() => {
@@ -388,6 +363,27 @@ const ModelManagement = () => {
     }
   };
 
+  // Function to trigger delete confirmation modal
+  const handleDeleteRequest = (modelId, modelName) => {
+    setDeleteTarget({ id: modelId, name: modelName });
+    setShowDeleteConfirm(true);
+  };
+
+  // Function to confirm and execute delete
+  const handleConfirmDelete = () => {
+    if (deleteTarget) {
+      handleDeleteModel(deleteTarget.id, deleteTarget.name);
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  // Function to cancel delete
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
   if (loading) {
     return (
       <div className="model-management-container">
@@ -421,8 +417,9 @@ const ModelManagement = () => {
         <h1>Model Management</h1>
         <p>Overview of all 3D models configured in the application.</p>
       </div>
-      <div className="toolbar-row">
+      <div className="toolbar-row" style={{display:'flex', gap:8}}>
         <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model</button>
+        <button className="btn-secondary" onClick={()=>navigate('/admin/models/generator')}>Open Model Generator</button>
       </div>
       <div className="models-grid">
         {modelEntries.map(([modelName, config]) => (
@@ -430,7 +427,7 @@ const ModelManagement = () => {
             key={modelName} 
             modelName={modelName} 
             config={config}
-            onDelete={handleDeleteModel}
+            onDelete={handleDeleteRequest}
             onEdit={handleEditModel}
             isDbModel={!!config.id} // Models from database have an id
           />
@@ -447,6 +444,31 @@ const ModelManagement = () => {
           editModel={editModel}
           isEditMode={true}
         />
+      )}
+      
+      {/* Delete Confirmation Modal - Rendered at top level */}
+      {showDeleteConfirm && deleteTarget && (
+        <div className="modal-overlay" onClick={handleCancelDelete}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Delete Model</h3>
+            <p>Are you sure you want to delete <strong>{deleteTarget.name}</strong>?</p>
+            <p className="warning-text">This action cannot be undone and will remove the model file from the server.</p>
+            <div className="modal-actions">
+              <button 
+                className="btn-secondary" 
+                onClick={handleCancelDelete}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-danger" 
+                onClick={handleConfirmDelete}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

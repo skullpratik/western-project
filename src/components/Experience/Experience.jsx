@@ -160,6 +160,33 @@ export function Experience({
   // -----------------------
   // Light helpers
   // -----------------------
+  // Try to resolve a light object from the scene using multiple strategies
+  const resolveLightObject = useCallback((lightConfig) => {
+    if (!lightConfig) return null;
+    const byName = allObjects.current[lightConfig.name];
+    if (byName && byName.isPointLight) return byName;
+
+    // Fallback: try meshName if provided in config
+    if (lightConfig.meshName) {
+      const byMesh = allObjects.current[lightConfig.meshName];
+      if (byMesh && byMesh.isPointLight) return byMesh;
+    }
+
+    // Last resort: fuzzy search for a PointLight whose name includes provided identifiers
+    const needleNames = [lightConfig.name, lightConfig.meshName].filter(Boolean).map((s) => String(s).toLowerCase());
+    const entries = Object.entries(allObjects.current || {});
+    for (const [key, obj] of entries) {
+      if (obj && obj.isPointLight) {
+        const keyL = String(key).toLowerCase();
+        if (needleNames.some((n) => keyL.includes(n))) {
+          return obj;
+        }
+      }
+    }
+
+    return null;
+  }, []);
+
   const initializeLights = useCallback(() => {
     // Check both config.lights and config.metadata.lights for light configuration
     const allLights = (config.lights && config.lights.length > 0) ? config.lights : (config.metadata?.lights || []);
@@ -167,7 +194,7 @@ export function Experience({
     const lightObjects = [];
 
     allLights.forEach((lightConfig) => {
-      const lightObject = allObjects.current[lightConfig.name];
+      const lightObject = resolveLightObject(lightConfig);
       if (lightObject && lightObject.isPointLight) {
         const initialIntensity = lightObject.intensity || 1.0;
         const shouldBeOn = lightConfig.defaultState === "on";
@@ -182,25 +209,34 @@ export function Experience({
           initialIntensity,
           isOn: shouldBeOn,
         });
+      } else {
+        console.warn(`⚠️ Light object not found or not a PointLight for config entry:`, lightConfig);
       }
     });
 
     setLights(lightObjects);
-  }, [config.lights, config.metadata?.lights]);
+  }, [config.lights, config.metadata?.lights, resolveLightObject]);
 
   const toggleLight = useCallback(async (lightName, turnOn) => {
     // Check both config.lights and config.metadata.lights for light configuration
-    const allLights = (config.lights && config.lights.length > 0) ? config.lights : (config.metadata?.lights || []);
-    const lightConfig = allLights.find((l) => l.name === lightName);
+    const mergedLights = (config.lights && config.lights.length > 0) ? config.lights : (config.metadata?.lights || []);
+    const lightConfig = mergedLights.find((l) => l.name === lightName) || mergedLights.find((l) => l.meshName === lightName);
     if (!lightConfig) {
       console.warn(`Light config not found for "${lightName}" in config.lights or config.metadata.lights`);
       return;
     }
-    const lightObj = allObjects.current[lightName];
-    if (!lightObj || !lightObj.isPointLight) return;
-    lightObj.intensity = turnOn ? (lightConfig.intensity || 1.0) : 0;
+
+    // Prefer object from state if available
+    const stateEntry = lights.find((l) => l.name === lightName) || lights.find((l) => l.meshName === lightName);
+    const lightObj = stateEntry?.object || resolveLightObject(lightConfig);
+    if (!lightObj || !lightObj.isPointLight) {
+      console.warn(`⚠️ Could not resolve light object for "${lightName}"`);
+      return;
+    }
+
+    lightObj.intensity = turnOn ? (lightConfig.intensity || stateEntry?.initialIntensity || 1.0) : 0;
     lightObj.visible = !!turnOn;
-    setLights((prev) => prev.map((l) => (l.name === lightName ? { ...l, isOn: !!turnOn } : l)));
+    setLights((prev) => prev.map((l) => (l.name === (stateEntry?.name || lightName) ? { ...l, isOn: !!turnOn } : l)));
 
     // Log light action
     await logInteraction("LIGHT_TOGGLE", {
@@ -209,14 +245,15 @@ export function Experience({
       intensity: lightObj.intensity,
       widgetType: "light"
     });
-  }, [config.lights, logInteraction]);
+  }, [config.lights, config.metadata?.lights, lights, resolveLightObject, logInteraction]);
 
   const toggleAllLights = useCallback(async (turnOn) => {
+    const mergedLights = (config.lights && config.lights.length > 0) ? config.lights : (config.metadata?.lights || []);
     lights.forEach((light) => {
-      const lightObj = allObjects.current[light.name];
+      const lightObj = light.object || resolveLightObject(light);
       if (lightObj && lightObj.isPointLight) {
-        const configLight = config.lights?.find((l) => l.name === light.name) || {};
-        lightObj.intensity = turnOn ? (configLight.intensity || 1.0) : 0;
+        const configLight = mergedLights.find((l) => l.name === light.name || l.meshName === light.name) || {};
+        lightObj.intensity = turnOn ? (configLight.intensity || light.initialIntensity || 1.0) : 0;
         lightObj.visible = !!turnOn;
       }
     });
@@ -227,11 +264,35 @@ export function Experience({
       state: turnOn ? "ON" : "OFF",
       widgetType: "light"
     });
-  }, [lights, config.lights, logInteraction]);
+  }, [lights, config.lights, config.metadata?.lights, resolveLightObject, logInteraction]);
 
   // -----------------------
   // Door presets, interactions
   // -----------------------
+  // Helpers to operate on whole logical objects (entire subtree)
+  const setObjectVisibleRecursive = useCallback((obj, visible) => {
+    if (!obj) return;
+    obj.traverse((o) => {
+      if (o.isObject3D) o.visible = visible;
+    });
+  }, []);
+
+  const getObjectByLogicalName = useCallback((name) => {
+    if (!name) return null;
+    const obj = allObjects.current[name];
+    if (obj) return obj;
+    // Fallback: try a startsWith/contains fuzzy match on keys
+    const key = String(name).toLowerCase();
+    const entries = Object.entries(allObjects.current || {});
+    let best = null;
+    for (const [n, o] of entries) {
+      const nl = String(n).toLowerCase();
+      if (nl === key) return o;
+      if (!best && (nl.startsWith(key) || nl.includes(key))) best = o;
+    }
+    return best;
+  }, []);
+
   const applyDoorSelection = useCallback(async (doorCount, position, doorType = "solid") => {
     if (!config?.presets?.doorSelections) return;
     const selection = config.presets.doorSelections?.[doorCount]?.[position];
@@ -240,10 +301,13 @@ export function Experience({
     // Update door selections state
     setDoorSelections({ count: doorCount, selection: position, doorType });
 
-    const visibleDoors = selection.doors || [];
-    const visiblePanels = selection.panels || [];
+  const visibleDoors = selection.doors || [];
+  const visiblePanels = selection.panels || [];
     const hiddenParts = new Set(selection.hide || []);
-    const showGlass = doorType === "glass";
+  const showGlass = doorType === "glass";
+
+  // Support doorTypeMap defined either at top-level or under presets
+  const doorTypeMap = config.doorTypeMap || config.presets?.doorTypeMap || {};
 
     if (baseScene) baseScene.traverse((o) => o.isObject3D && (o.visible = true));
     if (doorsScene) {
@@ -258,21 +322,21 @@ export function Experience({
 
     visibleDoors.forEach((doorName) => {
       let targetName = doorName;
-      if (showGlass && config.presets?.doorTypeMap?.toGlass?.[doorName]) {
-        targetName = config.presets.doorTypeMap.toGlass[doorName];
+      if (showGlass && doorTypeMap?.toGlass?.[doorName]) {
+        targetName = doorTypeMap.toGlass[doorName];
       }
-      const obj = allObjects.current[targetName];
-      if (obj) obj.traverse((o) => (o.visible = true));
+      const obj = getObjectByLogicalName(targetName);
+      if (obj) setObjectVisibleRecursive(obj, true);
     });
 
     visiblePanels.forEach((panelName) => {
-      const obj = allObjects.current[panelName];
-      if (obj) obj.traverse((o) => (o.visible = true));
+      const obj = getObjectByLogicalName(panelName);
+      if (obj) setObjectVisibleRecursive(obj, true);
     });
 
     hiddenParts.forEach((name) => {
-      const obj = allObjects.current[name];
-      if (obj) obj.traverse((o) => (o.visible = false));
+      const obj = getObjectByLogicalName(name);
+      if (obj) setObjectVisibleRecursive(obj, false);
     });
 
     // ensure drawers initial positions if any
@@ -280,7 +344,7 @@ export function Experience({
       config.interactionGroups.forEach((group) => {
         if (group.type === "drawers") {
           group.parts.forEach((drawer) => {
-            const drawerObj = allObjects.current[drawer.name];
+            const drawerObj = getObjectByLogicalName(drawer.name);
             if (!drawerObj) return;
             if (!hiddenParts.has(drawer.name)) {
               drawerObj.visible = true;
@@ -397,8 +461,20 @@ export function Experience({
       });
     });
 
-    // existing initialization: set base visible
+    // existing initialization: set all asset scenes visible by default
     if (baseScene) baseScene.traverse((o) => (o.visible = true));
+    if (doorsScene) {
+      doorsScene.visible = true;
+      doorsScene.traverse((o) => (o.visible = true));
+    }
+    if (glassDoorsScene) {
+      glassDoorsScene.visible = true;
+      glassDoorsScene.traverse((o) => (o.visible = true));
+    }
+    if (drawersScene) {
+      drawersScene.visible = true;
+      drawersScene.traverse((o) => (o.visible = true));
+    }
 
     // Debug: Log all object names in the scene
     console.log(`🔍 MODEL DEBUG for "${modelName}":`);
@@ -418,11 +494,11 @@ export function Experience({
       });
     }
 
-    // hiddenInitially
+    // hiddenInitially (operate on whole objects)
     if (Array.isArray(config.hiddenInitially)) {
       config.hiddenInitially.forEach((name) => {
-        const obj = allObjects.current[name];
-        if (obj) obj.visible = false;
+        const obj = getObjectByLogicalName(name);
+        if (obj) setObjectVisibleRecursive(obj, false);
       });
     }
 

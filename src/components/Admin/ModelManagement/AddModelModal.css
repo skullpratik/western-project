@@ -359,6 +359,54 @@
   opacity: 0.8;
 }
 
+/* Light pill specific styles */
+.light-pill {
+  background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+  border: 1px solid #f0ad4e;
+  color: #8a6914;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px;
+  gap: 4px;
+}
+
+.light-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.light-details .light-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.light-details .light-mesh,
+.light-details .light-state,
+.light-details .light-intensity {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.widget-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.widget-status.enabled {
+  background: #d4edda;
+  color: #155724;
+}
+
+.widget-status.missing {
+  background: #f8d7da;
+  color: #721c24;
+}
+
 .group-list {
   list-style: none;
   padding: 0;

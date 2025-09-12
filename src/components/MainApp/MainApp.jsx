@@ -62,6 +62,9 @@ function MainApp() {
       console.log('🔧 Model uiWidgets (top level):', model.uiWidgets);
       console.log('🔧 Model metadata.uiWidgets:', model.metadata?.uiWidgets);
       console.log('🔧 Final uiWidgets will be:', model.uiWidgets || model.metadata?.uiWidgets || []);
+      console.log('💡 Model lights (top level):', model.lights);
+      console.log('💡 Model metadata.lights:', model.metadata?.lights);
+      console.log('💡 Final lights will be:', model.lights || model.metadata?.lights || []);
       console.log('↘ transform from API:', {
         placementMode: model.placementMode,
         modelPosition: model.modelPosition,
@@ -76,9 +79,9 @@ function MainApp() {
         metadata: model.metadata || {},
         // Extract uiWidgets from both top level and metadata (fallback for older models)
         uiWidgets: model.uiWidgets || model.metadata?.uiWidgets || [],
-        // Extract other properties from top level (backend stores them there)
-        lights: model.lights || [],
-        hiddenInitially: model.hiddenInitially || [],
+        // Extract other properties from top level and metadata (fallback for older models)
+        lights: model.lights || model.metadata?.lights || [],
+        hiddenInitially: model.hiddenInitially || model.metadata?.hiddenInitially || [],
         camera: model.metadata?.camera || { position: [0, 2, 5], target: [0, 1, 0], fov: 50 },
         // Extract model positioning from database model
   placementMode: model.placementMode || 'autofit',
@@ -96,8 +99,8 @@ function MainApp() {
 
   const [selectedModel, setSelectedModel] = useState(() => {
     const saved = localStorage.getItem('selectedModel');
-    // Check if saved model exists in static config first, then check if it will exist in merged models
-    return saved && modelsConfig[saved] ? saved : "Undercounter";
+    // Check if saved model exists in static config first, fallback to null if no models available
+    return saved && modelsConfig[saved] ? saved : null;
   });
   const [api, setApi] = useState(null);
   const [showActivityLog, setShowActivityLog] = useState(false);
@@ -117,10 +120,19 @@ function MainApp() {
   const [reflectionActive, setReflectionActive] = useState(false);
 
   // Get current model configuration from merged set
-  const currentModel = mergedModels[selectedModel] || mergedModels["Undercounter"];
+  const currentModel = selectedModel ? mergedModels[selectedModel] : null;
 
   // User permissions
   const userPermissions = user?.permissions || {};
+
+  // Auto-select first available model when models are loaded and no model is selected
+  useEffect(() => {
+    if (!selectedModel && Object.keys(mergedModels).length > 0) {
+      const firstModel = Object.keys(mergedModels)[0];
+      setSelectedModel(firstModel);
+      try { localStorage.setItem('selectedModel', firstModel); } catch(_) {}
+    }
+  }, [mergedModels, selectedModel]);
 
   // Update position when changing models
   useEffect(() => {
@@ -176,6 +188,45 @@ function MainApp() {
           <div className="loading-state">
             <h2>Loading models...</h2>
             <p>Fetching available 3D models from server</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show empty state if no models are available
+  if (Object.keys(mergedModels).length === 0) {
+    return (
+      <div className="main-app">
+        <div className="app-content">
+          <div className="empty-state">
+            <h2>No models available</h2>
+            <p>No 3D models found. Please add models through the admin panel.</p>
+            {userPermissions.canManageModels && (
+              <button 
+                onClick={() => {
+                  // This will be handled by the Interface component's admin panel
+                  window.dispatchEvent(new CustomEvent('openAdminPanel'));
+                }}
+                className="add-model-button"
+              >
+                Add Your First Model
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state if models exist but no model is selected yet
+  if (!selectedModel || !currentModel) {
+    return (
+      <div className="main-app">
+        <div className="app-content">
+          <div className="loading-state">
+            <h2>Initializing...</h2>
+            <p>Setting up 3D viewer</p>
           </div>
         </div>
       </div>

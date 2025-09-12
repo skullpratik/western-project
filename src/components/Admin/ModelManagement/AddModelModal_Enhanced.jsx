@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './AddModelModal.css';
 
 const emptyState = {
@@ -19,7 +20,7 @@ const emptyState = {
   partDraft: { name:'', rotationAxis:'y', openAngle:'90', positionAxis:'', openPosition:'' },
   editingPart: null, // { groupIndex, partIndex } when editing a specific part
   widgets: [],
-  widgetDraft: { type:'lightWidget', title:'', meshName:'' },
+  widgetDraft: { type:'globalTextureWidget', title:'', meshName:'' },
   // Texture widget configuration
   textureWidget: {
     enabled: false,
@@ -55,6 +56,7 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
   const [feedback, setFeedback] = useState(null);
   const [rawError, setRawError] = useState(null);
   const objectUrlsRef = useRef([]);
+  const navigate = useNavigate();
 
   const update = (patch) => setState(s => ({ ...s, ...patch }));
 
@@ -72,14 +74,40 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
   modelRotation: editModel.modelRotation ? (Array.isArray(editModel.modelRotation) ? editModel.modelRotation.map(r => r * 180 / Math.PI).join(',') : editModel.modelRotation) : '0,0,0',
   modelScale: (editModel.modelScale ?? 1).toString(),
         hidden: editModel.hiddenInitially?.join(', ') || '',
-        lights: editModel.lights || [],
         lightDraft: { name:'', meshName:'', defaultState:'on', intensity:'5' },
         groups: editModel.interactionGroups || [],
         groupDraft: { type:'doors', label:'', parts: [] },
         partDraft: { name:'', rotationAxis:'y', openAngle:'90', positionAxis:'', openPosition:'' },
         editingPart: null,
-        widgets: editModel.uiWidgets?.filter(w => w.type !== 'textureWidget') || [],
-        widgetDraft: { type:'lightWidget', title:'', meshName:'' },
+        lights: (() => {
+          const allLights = editModel.lights || [];
+          // Remove duplicate lights (keep only the first one for each mesh)
+          const seenLightMeshes = new Set();
+          return allLights.filter(light => {
+            if (seenLightMeshes.has(light.meshName)) {
+              console.log(`🧹 Removing duplicate light for mesh: ${light.meshName}`);
+              return false; // Remove duplicate
+            }
+            seenLightMeshes.add(light.meshName);
+            return true; // Keep light
+          });
+        })(),
+        widgets: (() => {
+          const allWidgets = editModel.uiWidgets?.filter(w => w.type !== 'textureWidget') || [];
+          // Remove duplicate light widgets (keep only the first one for each mesh)
+          const seenLightMeshes = new Set();
+          return allWidgets.filter(w => {
+            if (w.type === 'lightWidget') {
+              if (seenLightMeshes.has(w.meshName)) {
+                console.log(`🧹 Removing duplicate light widget for mesh: ${w.meshName}`);
+                return false; // Remove duplicate
+              }
+              seenLightMeshes.add(w.meshName);
+            }
+            return true; // Keep widget
+          });
+        })(),
+        widgetDraft: { type:'globalTextureWidget', title:'', meshName:'' },
         // Handle texture widget
         textureWidget: (() => {
           const textureWidget = editModel.uiWidgets?.find(w => w.type === 'textureWidget');
@@ -118,13 +146,143 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
     }
   }, [isEditMode, editModel]);
 
-  // Light management
+  // Light management with mesh validation
   const addLight = () => {
     if(!state.lightDraft.name || !state.lightDraft.meshName) return;
-    update({ lights: [...state.lights, { ...state.lightDraft }], lightDraft: { name:'', meshName:'', defaultState:'on', intensity:'5' } });
+    
+    // Log mesh validation attempt
+    console.log(`🔍 Validating mesh name: "${state.lightDraft.meshName}"`);
+    
+    // TODO: Add actual mesh validation against model data when available
+    // For now, just log the mesh name for verification
+    console.log(`📝 Adding light with mesh: "${state.lightDraft.meshName}" - Please verify this mesh exists in your 3D model`);
+    
+    // Check for duplicate light with same mesh name
+    const existingLight = state.lights.find(l => l.meshName === state.lightDraft.meshName);
+    if (existingLight) {
+      console.log(`⚠️ Light with mesh "${state.lightDraft.meshName}" already exists - BLOCKED`);
+      setFeedback({ type: 'error', msg: `Light with mesh "${state.lightDraft.meshName}" already exists!` });
+      return;
+    }
+    
+    // Check for duplicate widget with same mesh name
+    const existingWidget = state.widgets.find(w => 
+      w.type === 'lightWidget' && w.meshName === state.lightDraft.meshName
+    );
+    if (existingWidget) {
+      console.log(`⚠️ Widget with mesh "${state.lightDraft.meshName}" already exists - BLOCKED`);
+      setFeedback({ type: 'error', msg: `Widget for mesh "${state.lightDraft.meshName}" already exists!` });
+      return;
+    }
+    
+    // Add the light
+    const newLight = { ...state.lightDraft };
+    
+    // Create corresponding widget
+    const newWidget = {
+      type: 'lightWidget',
+      title: `${newLight.name} Control`,
+      meshName: newLight.meshName
+    };
+    
+    console.log(`✅ Creating light: "${newLight.name}" with mesh: "${newLight.meshName}"`);
+    console.log(`✅ Creating widget: "${newWidget.title}" for mesh: "${newWidget.meshName}"`);
+    
+    update({ 
+      lights: [...state.lights, newLight], 
+      widgets: [...state.widgets, newWidget],
+      lightDraft: { name:'', meshName:'', defaultState:'on', intensity:'5' } 
+    });
   };
 
-  const removeLight = (i) => update({ lights: state.lights.filter((_,idx)=>idx!==i) });
+  const removeLight = (i) => {
+    const removedLight = state.lights[i];
+    console.log(`🗑️ Removing light: "${removedLight.name}" with mesh: "${removedLight.meshName}"`);
+    
+    // Also remove the corresponding widget
+    const updatedWidgets = state.widgets.filter(w => 
+      !(w.type === 'lightWidget' && w.meshName === removedLight.meshName)
+    );
+    
+    console.log(`🗑️ Also removed corresponding light widget for mesh: "${removedLight.meshName}"`);
+    
+    update({ 
+      lights: state.lights.filter((_,idx)=>idx!==i),
+      widgets: updatedWidgets
+    });
+  };
+
+  // Clean up duplicate lights and widgets
+  const cleanupDuplicates = () => {
+    console.log('🧹 Starting duplicate cleanup...');
+    
+    // Remove duplicate lights (keep first occurrence)
+    const seenLightMeshes = new Set();
+    const cleanLights = state.lights.filter((light, index) => {
+      if (seenLightMeshes.has(light.meshName)) {
+        console.log(`🧹 Removing duplicate light: "${light.name}" with mesh: "${light.meshName}"`);
+        return false;
+      }
+      seenLightMeshes.add(light.meshName);
+      return true;
+    });
+    
+    // Remove duplicate widgets (keep first occurrence)
+    const seenWidgetMeshes = new Set();
+    const cleanWidgets = state.widgets.filter((widget, index) => {
+      if (widget.type === 'lightWidget') {
+        if (seenWidgetMeshes.has(widget.meshName)) {
+          console.log(`🧹 Removing duplicate widget: "${widget.title}" with mesh: "${widget.meshName}"`);
+          return false;
+        }
+        seenWidgetMeshes.add(widget.meshName);
+      }
+      return true;
+    });
+    
+    // Update state if changes were made
+    if (cleanLights.length !== state.lights.length || cleanWidgets.length !== state.widgets.length) {
+      console.log(`🧹 Cleanup complete: Removed ${state.lights.length - cleanLights.length} duplicate lights and ${state.widgets.length - cleanWidgets.length} duplicate widgets`);
+      update({ 
+        lights: cleanLights,
+        widgets: cleanWidgets
+      });
+    } else {
+      console.log('🧹 No duplicates found');
+    }
+  };
+
+  // Create missing widgets for lights that don't have them
+  const createMissingWidgets = () => {
+    console.log('🔧 Checking for missing widgets...');
+    
+    const missingWidgets = [];
+    
+    state.lights.forEach(light => {
+      const hasWidget = state.widgets.find(w => 
+        w.type === 'lightWidget' && w.meshName === light.meshName
+      );
+      
+      if (!hasWidget) {
+        const newWidget = {
+          type: 'lightWidget',
+          title: `${light.name} Control`,
+          meshName: light.meshName
+        };
+        missingWidgets.push(newWidget);
+        console.log(`🔧 Creating missing widget for light: "${light.name}" with mesh: "${light.meshName}"`);
+      }
+    });
+    
+    if (missingWidgets.length > 0) {
+      update({ 
+        widgets: [...state.widgets, ...missingWidgets]
+      });
+      console.log(`✅ Created ${missingWidgets.length} missing widgets`);
+    } else {
+      console.log('✅ All lights have widgets');
+    }
+  };
 
   // Group management
   const addGroup = () => {
@@ -222,7 +380,7 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
 
   const removePart = (i) => update({ groupDraft: { ...state.groupDraft, parts: state.groupDraft.parts.filter((_,idx)=>idx!==i) } });
 
-  // Widget management
+  // Widget management with validation
   const addWidget = () => {
     if(!state.widgetDraft.type) return;
     
@@ -232,22 +390,31 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
       return;
     }
     
-    // For light widgets, automatically create the corresponding light configuration
+    // Check for duplicate widgets
+    const existingWidget = state.widgets.find(w => 
+      w.type === state.widgetDraft.type && 
+      (state.widgetDraft.type !== 'lightWidget' || w.meshName === state.widgetDraft.meshName)
+    );
+    
+    if (existingWidget) {
+      console.log(`⚠️ Widget of type "${state.widgetDraft.type}" already exists`);
+      alert(`A ${state.widgetDraft.type} widget already exists!`);
+      return;
+    }
+    
+    // For light widgets, validate mesh and check for corresponding light
     if (state.widgetDraft.type === 'lightWidget' && state.widgetDraft.meshName) {
-      const lightName = state.widgetDraft.meshName;
-      const existingLight = state.lights.find(l => l.name === lightName);
+      console.log(`🔍 Validating light widget mesh: "${state.widgetDraft.meshName}"`);
+      
+      const meshName = state.widgetDraft.meshName;
+      const existingLight = state.lights.find(l => l.meshName === meshName);
       
       if (!existingLight) {
-        // Add the light configuration automatically
-        const newLight = {
-          name: lightName,
-          meshName: lightName,
-          defaultState: 'on',
-          intensity: '5'
-        };
-        update({ 
-          lights: [...state.lights, newLight]
-        });
+        console.log(`⚠️ No light configuration found for mesh: "${meshName}"`);
+        alert(`Please create a light configuration for mesh "${meshName}" first!`);
+        return;
+      } else {
+        console.log(`✅ Found matching light configuration for mesh: "${meshName}"`);
       }
     }
     
@@ -265,7 +432,7 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
     
     update({ 
       widgets: [...state.widgets, widget], 
-      widgetDraft: { type:'lightWidget', title:'', meshName:'' } 
+      widgetDraft: { type:'globalTextureWidget', title:'', meshName:'' } 
     });
   };
 
@@ -655,6 +822,13 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
                     <small className="help-text">Supported formats: GLB (recommended), GLTF. Max size: 50MB</small>
                   </div>
                 ) : (
+                  <>
+                  <div className="info-banner" style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'10px 12px', border:'1px dashed #cbd5e1', borderRadius:8, marginBottom:12}}>
+                    <div>
+                      <strong>Guided setup available:</strong> build metadata with counts, visibility rules, and widgets using the wizard.
+                    </div>
+                    <button type="button" className="btn-secondary" onClick={()=>navigate('/admin/models/wizard')}>Open Model Wizard →</button>
+                  </div>
                   <div className="assets-grid">
                     <h5>Asset Files</h5>
                     {[
@@ -683,6 +857,7 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
                       </div>
                     ))}
                   </div>
+                  </>
                 )}
               </div>
 
@@ -1028,37 +1203,51 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
                       />
                       
                       <button type="button" onClick={addLight} className="btn-add">Add Light</button>
+                      <button type="button" onClick={cleanupDuplicates} className="btn-secondary" style={{marginLeft: '10px'}}>🧹 Clean Duplicates</button>
+                      <button type="button" onClick={createMissingWidgets} className="btn-secondary" style={{marginLeft: '10px'}}>🔧 Fix Missing Widgets</button>
                     </div>
                   </div>
 
                   {state.lights.length > 0 && (
                     <div className="lights-list">
-                      <h6>Configured Lights:</h6>
+                      <h6>Configured Lights & Widgets:</h6>
                       <ul className="pill-list">
-                        {state.lights.map((light, i) => (
-                          <li key={i} className="pill">
-                            <span className="light-name">{light.name}</span>
-                            <span className="light-mesh">Mesh: {light.meshName}</span>
-                            <span className="light-state">Default: {light.defaultState}</span>
-                            <span className="light-intensity">Intensity: {light.intensity}</span>
-                            <button type="button" onClick={() => removeLight(i)} className="btn-remove">×</button>
-                          </li>
-                        ))}
+                        {state.lights.map((light, i) => {
+                          const correspondingWidget = state.widgets.find(w => 
+                            w.type === 'lightWidget' && w.meshName === light.meshName
+                          );
+                          return (
+                            <li key={i} className="pill light-pill">
+                              <div className="light-details">
+                                <span className="light-name">💡 {light.name}</span>
+                                <span className="light-mesh">Mesh: {light.meshName}</span>
+                                <span className="light-state">Default: {light.defaultState}</span>
+                                <span className="light-intensity">Intensity: {light.intensity}</span>
+                                {correspondingWidget ? (
+                                  <span className="widget-status enabled">✅ Widget: "{correspondingWidget.title}"</span>
+                                ) : (
+                                  <span className="widget-status missing">⚠️ No widget created</span>
+                                )}
+                              </div>
+                              <button type="button" onClick={() => removeLight(i)} className="btn-remove">×</button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Other UI Widgets Section */}
+              {/* Additional Widgets Section - NO LIGHT WIDGETS */}
               <div className="form-section">
                 <div className="section-header">
-                  <h4>🔧 Other UI Widgets</h4>
-                  <p>Add additional interface widgets like light controls, reflection toggles, etc.</p>
+                  <h4>🔧 Additional Widgets</h4>
+                  <p>Add other interface widgets (lights are configured above in the Lights section)</p>
                 </div>
 
                 <div className="subsection">
-                  <h5>Add Widget</h5>
+                  <h5>Add Non-Light Widget</h5>
                   
                   <div className="widget-draft">
                     <div className="draft-row">
@@ -1067,41 +1256,36 @@ const AddModelModalEnhanced = ({ onClose, onAdd, editModel = null, isEditMode = 
                         onChange={e=>update({ widgetDraft:{ ...state.widgetDraft, type:e.target.value } })}
                         className="form-select"
                       >
-                        <option value="lightWidget">Light Widget</option>
                         <option value="globalTextureWidget">Global Texture Widget</option>
+                        <option value="reflectionWidget">Reflection Toggle</option>
+                        <option value="movementWidget">Movement Controls</option>
                       </select>
                       
                       <input 
-                        placeholder="Widget Title (e.g., Lighting Controls)" 
+                        placeholder="Widget Title (e.g., Texture Controls)" 
                         value={state.widgetDraft.title} 
                         onChange={e=>update({ widgetDraft:{ ...state.widgetDraft, title:e.target.value } })}
                         className="form-input"
                       />
                       
-                      {state.widgetDraft.type === 'lightWidget' && (
-                        <input 
-                          placeholder="Mesh Name (e.g., light_bulb01)" 
-                          value={state.widgetDraft.meshName || ''} 
-                          onChange={e=>update({ widgetDraft:{ ...state.widgetDraft, meshName:e.target.value } })}
-                          className="form-input"
-                        />
-                      )}
-                      
                       <button type="button" onClick={addWidget} className="btn-add">Add Widget</button>
                     </div>
                   </div>
 
-                  {state.widgets.length > 0 && (
+                  {state.widgets.filter(w => w.type !== 'lightWidget').length > 0 && (
                     <div className="widgets-list">
-                      <h6>Configured Widgets:</h6>
+                      <h6>Configured Additional Widgets:</h6>
                       <ul className="pill-list">
-                        {state.widgets.map((w, i) => (
-                          <li key={i} className="pill">
-                            <span className="widget-type">{w.type}</span>
-                            <span className="widget-title">{w.title || 'Untitled'}</span>
-                            <button type="button" onClick={() => removeWidget(i)} className="btn-remove">×</button>
-                          </li>
-                        ))}
+                        {state.widgets.filter(w => w.type !== 'lightWidget').map((w, i) => {
+                          const originalIndex = state.widgets.findIndex(widget => widget === w);
+                          return (
+                            <li key={originalIndex} className="pill">
+                              <span className="widget-type">{w.type}</span>
+                              <span className="widget-title">{w.title || 'Untitled'}</span>
+                              <button type="button" onClick={() => removeWidget(originalIndex)} className="btn-remove">×</button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
