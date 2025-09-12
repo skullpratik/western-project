@@ -161,10 +161,12 @@ export function Experience({
   // Light helpers
   // -----------------------
   const initializeLights = useCallback(() => {
-    if (!config.lights || !allObjects.current) return;
+    // Check both config.lights and config.metadata.lights for light configuration
+    const allLights = (config.lights && config.lights.length > 0) ? config.lights : (config.metadata?.lights || []);
+    if (!allLights.length || !allObjects.current) return;
     const lightObjects = [];
 
-    config.lights.forEach((lightConfig) => {
+    allLights.forEach((lightConfig) => {
       const lightObject = allObjects.current[lightConfig.name];
       if (lightObject && lightObject.isPointLight) {
         const initialIntensity = lightObject.intensity || 1.0;
@@ -184,12 +186,14 @@ export function Experience({
     });
 
     setLights(lightObjects);
-  }, [config.lights]);
+  }, [config.lights, config.metadata?.lights]);
 
   const toggleLight = useCallback(async (lightName, turnOn) => {
-    const lightConfig = config.lights?.find((l) => l.name === lightName);
+    // Check both config.lights and config.metadata.lights for light configuration
+    const allLights = (config.lights && config.lights.length > 0) ? config.lights : (config.metadata?.lights || []);
+    const lightConfig = allLights.find((l) => l.name === lightName);
     if (!lightConfig) {
-      console.warn(`Light config not found for "${lightName}"`);
+      console.warn(`Light config not found for "${lightName}" in config.lights or config.metadata.lights`);
       return;
     }
     const lightObj = allObjects.current[lightName];
@@ -301,7 +305,7 @@ export function Experience({
     });
   }, [config, baseScene, doorsScene, glassDoorsScene, drawersScene, logInteraction]);
 
-  const { togglePart, isInteractiveObject, getInteractionType } = useInteractions(
+  const { togglePart, isInteractiveObject, getInteractionType, findInteractiveObjectName } = useInteractions(
     allObjects, 
     config, 
     logInteraction
@@ -1202,37 +1206,36 @@ export function Experience({
   ]);
 
   // -----------------------
-  // Pointer handler for interactive selection
+  // Pointer handler for interactive selection - DYNAMIC VERSION
   // -----------------------
   const handlePointerDown = (e) => {
     e.stopPropagation();
     const picked = e.object;
     if (!picked || !picked.visible) return;
 
-    const hierarchyNames = [];
-    let cur = picked;
-    while (cur) {
-      if (cur.name) hierarchyNames.push(cur.name);
-      cur = cur.parent;
-    }
-
-    console.log('🖱️ CLICK DEBUG:');
+    console.log('🖱️ CLICK DEBUG (Dynamic):');
     console.log('  Clicked object:', picked.name);
-    console.log('  Hierarchy names:', hierarchyNames);
 
-    const interactiveObject = hierarchyNames.find((n) => {
-      const obj = allObjects.current[n];
-      const isInteractive = obj && obj.visible && isInteractiveObject(n);
-      console.log(`  Checking ${n}: exists=${!!obj}, visible=${obj?.visible}, interactive=${isInteractive}`);
-      return isInteractive;
-    });
+    // Use dynamic detection to find the interactive object
+    const interactiveObjectName = findInteractiveObjectName(picked.name);
+    
+    console.log('🔍 Dynamic interaction search result:', interactiveObjectName);
 
-    if (interactiveObject) {
-      console.log(`✅ Found interactive object: ${interactiveObject}`);
-      togglePart(interactiveObject, "auto");
+    if (interactiveObjectName) {
+      console.log(`✅ Found interactive object: ${interactiveObjectName}`);
+      console.log(`🎬 Calling togglePart for: ${interactiveObjectName}`);
+      togglePart(interactiveObjectName, "auto");
       e.stopPropagation();
     } else {
       console.log('❌ No interactive object found in hierarchy');
+      console.log('🔧 Clicked object hierarchy:');
+      let current = picked;
+      let level = 0;
+      while (current && level < 10) { // Limit to prevent infinite loops
+        console.log(`  Level ${level}: ${current.name || 'unnamed'}`);
+        current = current.parent;
+        level++;
+      }
     }
   };
 

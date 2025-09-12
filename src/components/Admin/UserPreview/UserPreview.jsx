@@ -39,6 +39,55 @@ function UserPreview() {
     saveConfig: true
   };
 
+  // Load database models just like MainApp
+  const [dbModels, setDbModels] = useState([]);
+  
+  useEffect(() => {
+    const fetchDbModels = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/models`);
+        if (response.ok) {
+          const models = await response.json();
+          setDbModels(models);
+        }
+      } catch (err) {
+        console.error('Error fetching database models:', err);
+      }
+    };
+    fetchDbModels();
+  }, []);
+
+  // Convert database models to the format expected by Experience component
+  const dbModelsFormatted = useMemo(() => {
+    const formatted = {};
+    dbModels.forEach(model => {
+      console.log('🔧 Processing model (UserPreview):', model.name, 'metadata:', model.metadata);
+      console.log('🔧 Model uiWidgets (top level):', model.uiWidgets);
+      console.log('🔧 Model metadata.uiWidgets:', model.metadata?.uiWidgets);
+      console.log('🔧 Final uiWidgets will be:', model.uiWidgets || model.metadata?.uiWidgets || []);
+      formatted[model.name] = {
+        path: model.file,
+        displayName: model.displayName,
+        type: model.type,
+        interactionGroups: model.interactionGroups || [],
+        metadata: model.metadata || {},
+        // Extract uiWidgets from both top level and metadata (fallback for older models)
+        uiWidgets: model.uiWidgets || model.metadata?.uiWidgets || [],
+        // Extract other properties from top level (backend stores them there)
+        lights: model.lights || [],
+        hiddenInitially: model.hiddenInitially || [],
+        camera: model.metadata?.camera || { position: [0, 2, 5], target: [0, 1, 0], fov: 50 },
+        // Extract model positioning from database model
+        placementMode: model.placementMode || 'autofit',
+        modelPosition: Array.isArray(model.modelPosition) ? model.modelPosition : undefined,
+        modelRotation: Array.isArray(model.modelRotation) ? model.modelRotation : undefined,
+        modelScale: typeof model.modelScale === 'number' ? model.modelScale : undefined
+      };
+      console.log('Formatted model (UserPreview):', formatted[model.name]);
+    });
+    return formatted;
+  }, [dbModels]);
+
   // Merge custom models for preview just like MainApp
   const [customModels, setCustomModels] = useState(() => {
     try { const s = localStorage.getItem('customModels'); return s ? JSON.parse(s) : {}; } catch(_) { return {}; }
@@ -50,7 +99,7 @@ function UserPreview() {
     window.addEventListener('customModelsUpdated', handler);
     return () => window.removeEventListener('customModelsUpdated', handler);
   }, []);
-  const mergedModels = useMemo(() => ({ ...modelsConfig, ...customModels }), [customModels]);
+  const mergedModels = useMemo(() => ({ ...modelsConfig, ...dbModelsFormatted }), [dbModelsFormatted]);
   const [selectedModel, setSelectedModel] = useState(() => {
     const saved = localStorage.getItem('selectedModel');
     return saved && (modelsConfig[saved] || customModels[saved]) ? saved : 'Undercounter';

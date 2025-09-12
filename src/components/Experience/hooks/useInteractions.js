@@ -12,14 +12,26 @@ export function useInteractions(allObjects, config) {
   // Normalize config to a simple map shape once
   const getParts = () => {
     const parts = { doors: {}, drawers: {} };
+    console.log('🔧 useInteractions getParts() called');
+    console.log('🔧 Config:', config);
+    console.log('🔧 Config.interactionGroups:', config?.interactionGroups);
+    
     if (config && Array.isArray(config.interactionGroups)) {
-      config.interactionGroups.forEach((group) => {
-        if (!Array.isArray(group.parts)) return;
+      console.log(`🔧 Processing ${config.interactionGroups.length} interaction groups`);
+      config.interactionGroups.forEach((group, index) => {
+        console.log(`🔧 Group ${index}:`, group);
+        if (!Array.isArray(group.parts)) {
+          console.warn(`⚠️ Group ${index} has no valid parts array`);
+          return;
+        }
         const type = String(group.type || "").toLowerCase();
+        console.log(`🔧 Group type: "${type}"`);
 
         // Handle doors
         if (type.includes("door")) {
+          console.log(`🚪 Processing door group with ${group.parts.length} parts`);
           group.parts.forEach((p) => {
+            console.log(`🚪 Adding door part: ${p.name}`, p);
             parts.doors[p.name] = {
               axis: p.rotationAxis || p.axis || "y",
               angle: p.openAngle ?? p.angle ?? 90,
@@ -30,7 +42,9 @@ export function useInteractions(allObjects, config) {
 
         // Handle drawers
         if (type.includes("drawer")) {
+          console.log(`📦 Processing drawer group with ${group.parts.length} parts`);
           group.parts.forEach((p) => {
+            console.log(`📦 Adding drawer part: ${p.name}`, p);
             parts.drawers[p.name] = {
               axis: p.positionAxis || p.axis || "z",
               openPosition: p.openPosition ?? 0.15,
@@ -41,17 +55,31 @@ export function useInteractions(allObjects, config) {
           return;
         }
       });
+    } else {
+      console.warn('❌ No valid interactionGroups found in config');
     }
+    console.log('🔧 Final parts configuration:', parts);
     return parts;
   };
 
   const toggleDoor = (name) => {
     const obj = allObjects.current[name];
-    if (!obj) return;
+    console.log(`🚪 toggleDoor called for: ${name}`);
+    console.log(`🔍 Object found:`, !!obj);
+    if (!obj) {
+      console.warn(`❌ Door object "${name}" not found in allObjects`);
+      console.log('Available objects:', Object.keys(allObjects.current));
+      return;
+    }
     const parts = getParts();
+    console.log('🔧 Door parts configuration:', parts.doors);
     const doorConfig = parts.doors[name];
+    console.log(`🚪 Door config for "${name}":`, doorConfig);
 
-    if (!doorConfig) return;
+    if (!doorConfig) {
+      console.warn(`❌ No door configuration found for "${name}"`);
+      return;
+    }
 
     const isOpen = doorStates.current[name] === "open";
     const targetRotation = new THREE.Euler().copy(obj.rotation);
@@ -125,17 +153,30 @@ export function useInteractions(allObjects, config) {
   };
 
   const togglePart = (name, type) => {
+    console.log(`🎬 togglePart called for: ${name}, type: ${type}`);
+    
     if (type === 'door') {
+      console.log(`🚪 Directly calling toggleDoor for: ${name}`);
       toggleDoor(name);
     } else if (type === 'drawer') {
+      console.log(`📦 Directly calling toggleDrawer for: ${name}`);
       toggleDrawer(name);
     } else {
       // Auto-detect type
+      console.log(`🔍 Auto-detecting type for: ${name}`);
       const parts = getParts();
+      console.log(`🔧 Parts available:`, parts);
+      
       if (parts.doors[name]) {
+        console.log(`🚪 Found ${name} in doors, calling toggleDoor`);
         toggleDoor(name);
       } else if (parts.drawers[name]) {
+        console.log(`📦 Found ${name} in drawers, calling toggleDrawer`);
         toggleDrawer(name);
+      } else {
+        console.log(`❌ ${name} not found in doors or drawers`);
+        console.log(`🔧 Available doors:`, Object.keys(parts.doors));
+        console.log(`🔧 Available drawers:`, Object.keys(parts.drawers));
       }
     }
   };
@@ -145,7 +186,46 @@ export function useInteractions(allObjects, config) {
     if (!obj || !obj.visible) return false;
     
     const parts = getParts();
-    return parts.doors[objectName] || parts.drawers[objectName];
+    
+    // Direct match first
+    if (parts.doors[objectName] || parts.drawers[objectName]) {
+      return true;
+    }
+    
+    // If no direct match, check if this object or any of its parents match configured names
+    let current = obj;
+    while (current) {
+      if (current.name && (parts.doors[current.name] || parts.drawers[current.name])) {
+        return true;
+      }
+      current = current.parent;
+    }
+    
+    return false;
+  };
+
+  // New function to find the actual interactive object name in hierarchy
+  const findInteractiveObjectName = (clickedObjectName) => {
+    const clickedObj = allObjects.current[clickedObjectName];
+    if (!clickedObj) return null;
+    
+    const parts = getParts();
+    
+    // Check the clicked object first
+    if (parts.doors[clickedObjectName] || parts.drawers[clickedObjectName]) {
+      return clickedObjectName;
+    }
+    
+    // Traverse up the hierarchy to find the interactive parent
+    let current = clickedObj;
+    while (current) {
+      if (current.name && (parts.doors[current.name] || parts.drawers[current.name])) {
+        return current.name;
+      }
+      current = current.parent;
+    }
+    
+    return null;
   };
 
   const getInteractionType = (objectName) => {
@@ -160,6 +240,7 @@ export function useInteractions(allObjects, config) {
     toggleDoor,  // Separate functions for explicit control
     toggleDrawer,
     isInteractiveObject,
+    findInteractiveObjectName,
     getInteractionType
   };
 }

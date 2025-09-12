@@ -14,6 +14,10 @@ export const widgetRegistry = {
   textureWidget: TextureWidget,
   globalTextureWidget: GlobalTextureWidget,
   lightWidget: LightWidget,
+  // Map missing widget types to existing components (excluding movement)
+  reflectionWidget: LightWidget, // Reflection controls use light widget
+  customWidget: TextureWidget, // Custom widgets default to texture widget
+  // movementWidget intentionally not mapped - will be filtered out
 };
 
 export default widgetRegistry;

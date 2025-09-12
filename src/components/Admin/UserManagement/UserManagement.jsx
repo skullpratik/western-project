@@ -46,10 +46,15 @@ const UserManagement = () => {
       textureWidget: false,
       lightWidget: false,
       globalTextureWidget: false,
+      // Add missing widget permissions
+      reflectionWidget: false,
+      movementWidget: false,
+      customWidget: false,
       saveConfig: false,
       canRotate: true,
       canPan: false,
-      canZoom: false
+      canZoom: false,
+      canMove: false
     };
 
     const completePermissions = { ...defaultPermissions, ...user.permissions };

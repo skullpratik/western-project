@@ -58,7 +58,10 @@ function MainApp() {
   const dbModelsFormatted = useMemo(() => {
     const formatted = {};
     dbModels.forEach(model => {
-      console.log('Processing model:', model.name, 'metadata:', model.metadata);
+      console.log('🔧 Processing model:', model.name, 'metadata:', model.metadata);
+      console.log('🔧 Model uiWidgets (top level):', model.uiWidgets);
+      console.log('🔧 Model metadata.uiWidgets:', model.metadata?.uiWidgets);
+      console.log('🔧 Final uiWidgets will be:', model.uiWidgets || model.metadata?.uiWidgets || []);
       console.log('↘ transform from API:', {
         placementMode: model.placementMode,
         modelPosition: model.modelPosition,
@@ -71,11 +74,11 @@ function MainApp() {
         type: model.type,
         interactionGroups: model.interactionGroups || [],
         metadata: model.metadata || {},
-        // Extract uiWidgets from metadata to top level
-        uiWidgets: model.metadata?.uiWidgets || [],
-        // Extract other metadata properties that might be needed
-        lights: model.metadata?.lights || [],
-        hiddenInitially: model.metadata?.hiddenInitially || [],
+        // Extract uiWidgets from both top level and metadata (fallback for older models)
+        uiWidgets: model.uiWidgets || model.metadata?.uiWidgets || [],
+        // Extract other properties from top level (backend stores them there)
+        lights: model.lights || [],
+        hiddenInitially: model.hiddenInitially || [],
         camera: model.metadata?.camera || { position: [0, 2, 5], target: [0, 1, 0], fov: 50 },
         // Extract model positioning from database model
   placementMode: model.placementMode || 'autofit',
@@ -133,7 +136,7 @@ function MainApp() {
       const token = localStorage.getItem("token");
       if (!token) return;
 
-  await fetch(`/api/admin/activity/log`, {
+  await fetch(`/api/activity/log`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -28,6 +28,31 @@ export function Interface({
   const config = models[selectedModel] || {};
   const allWidgets = config.uiWidgets || [];
 
+  // Enhanced widget debugging
+  React.useEffect(() => {
+    console.log('🔍 INTERFACE CONFIG DEBUG:');
+    console.log('  selectedModel:', selectedModel);
+    console.log('  FULL config object:', config);
+    console.log('  config.lights:', config.lights);
+    console.log('  config.lights length:', config.lights?.length || 0);
+    console.log('  config.uiWidgets:', config.uiWidgets);
+    console.log('  config.metadata:', config.metadata);
+    console.log('  config.metadata?.uiWidgets:', config.metadata?.uiWidgets);
+    console.log('  allWidgets (final):', allWidgets);
+    console.log('  allWidgets.length:', allWidgets.length);
+    
+    // Check for lights in different places
+    console.log('🔍 LIGHTS LOCATION CHECK:');
+    console.log('  - config.lights:', config.lights);
+    console.log('  - config.metadata?.lights:', config.metadata?.lights);
+    
+    if (allWidgets.length > 0) {
+      allWidgets.forEach((widget, i) => {
+        console.log(`    Widget ${i}:`, widget);
+      });
+    }
+  }, [selectedModel, JSON.stringify(config)]);
+
   // Function to capture current model state
   const captureCurrentState = () => {
     if (!api?.getCurrentState) {
@@ -78,18 +103,28 @@ export function Interface({
     alert('Configuration loaded successfully!');
   };
   
-  console.log('=== INTERFACE DEBUG ===');
-  console.log('Selected Model:', selectedModel);
-  console.log('Available Models:', Object.keys(models));
-  console.log('Config for selected model:', config);
-  console.log('Config.metadata:', config.metadata);
-  console.log('Config.metadata.uiWidgets:', config.metadata?.uiWidgets);
-  console.log('Config.uiWidgets:', config.uiWidgets);
-  console.log('All Widgets:', allWidgets);
-  console.log('User Permissions:', userPermissions);
-  console.log('Config.interactionGroups:', config.interactionGroups);
-  console.log('Interaction Groups Length:', config.interactionGroups?.length || 0);
-  console.log('=======================');
+  // Debug logging - only log when selectedModel changes
+  React.useEffect(() => {
+    console.log('=== INTERFACE DEBUG ===');
+    console.log('Selected Model:', selectedModel);
+    console.log('Available Models:', Object.keys(models));
+    console.log('Config for selected model:', config);
+    console.log('Config.metadata:', config.metadata);
+    console.log('Config.metadata.uiWidgets:', config.metadata?.uiWidgets);
+    console.log('Config.uiWidgets:', config.uiWidgets);
+    console.log('All Widgets:', allWidgets);
+    console.log('🔍 Widget Sources:');
+    console.log('  - From config.uiWidgets:', config.uiWidgets || []);
+    console.log('  - From config.metadata.uiWidgets:', config.metadata?.uiWidgets || []);
+    console.log('  - Total merged widgets:', allWidgets.length);
+    console.log('User Permissions:', userPermissions);
+    console.log('🔍 Specific permission checks:');
+    console.log('  - lightWidget permission:', userPermissions?.lightWidget);
+    console.log('  - hasPermission(lightWidget):', hasPermission('lightWidget'));
+    console.log('Config.interactionGroups:', config.interactionGroups);
+    console.log('Interaction Groups Length:', config.interactionGroups?.length || 0);
+    console.log('=======================');
+  }, [selectedModel, config.uiWidgets]); // Only log when these change
 
   // Permission helpers (backend uses specific keys; derive common intents)
   const hasPermission = (permission) => {
@@ -124,39 +159,64 @@ export function Interface({
       globalTextureWidget: 'globalTextureWidget',
       textureWidget: 'textureWidget',
       lightWidget: 'lightWidget',
+      reflectionWidget: 'lightWidget', // Reflection uses light permission
+      movementWidget: 'canMove', // Movement uses canMove permission
+      customWidget: 'textureWidget', // Custom widgets use texture permission (most common)
       saveConfig: 'saveConfig',
       modelPosition: 'canMove',
     };
-    return permissionMap[widgetType] || 'canRead';
+    const permission = permissionMap[widgetType] || 'textureWidget'; // Default to textureWidget instead of canRead
+    return permission;
   };
 
-  // Filter widgets based on user permissions
-  const widgets = allWidgets.filter(widget => {
-    const requiredPermission = getWidgetPermission(widget.type);
-    return hasPermission(requiredPermission);
-  });
+  // Filter widgets based on user permissions (memoized to prevent loops)
+  const widgets = React.useMemo(() => {
+    const filtered = allWidgets.filter(widget => {
+      const requiredPermission = getWidgetPermission(widget.type);
+      const hasPermissionResult = hasPermission(requiredPermission);
+      return hasPermissionResult;
+    });
+    
+    // Simple logging without circular reference
+    console.log('🎮 Widgets updated:', filtered.length, 'widgets available');
+    
+    return filtered;
+  }, [JSON.stringify(allWidgets), JSON.stringify(userPermissions)]); // Use JSON.stringify to avoid object reference issues
+
+  // Widget filtering debug removed to prevent infinite loops
 
   // Render individual widget
   const renderWidget = (widget, index) => {
     const WidgetComponent = widgetRegistry[widget.type];
+    
     if (!WidgetComponent) {
-      console.warn(`Widget type "${widget.type}" not found in registry`);
-      return null;
+      console.error(`❌ Widget type "${widget.type}" not found in registry`);
+      return <div style={{color: 'red', padding: '10px', border: '1px solid red', marginBottom: '12px'}}>
+        ❌ Widget "{widget.type}" not found
+      </div>;
     }
 
-    return (
-      <WidgetComponent
-        key={`${widget.type}-${index}`}
-        config={config}
-        api={api}
-        togglePart={togglePart}
-        applyDoorSelection={applyDoorSelection}
-        applyRequest={applyRequest}
-        userPermissions={userPermissions}
-        hasPermission={hasPermission}
-        {...widget.props}
-      />
-    );
+    try {
+      return (
+        <div key={`${widget.type}-${index}`} style={{marginBottom: '12px'}}>
+          <WidgetComponent
+            config={config}
+            api={api}
+            togglePart={togglePart}
+            applyDoorSelection={applyDoorSelection}
+            applyRequest={applyRequest}
+            userPermissions={userPermissions}
+            hasPermission={hasPermission}
+            {...widget.props}
+          />
+        </div>
+      );
+    } catch (error) {
+      console.error(`❌ Error rendering ${widget.type}:`, error);
+      return <div style={{color: 'red', padding: '10px', border: '1px solid red', marginBottom: '12px'}}>
+        ❌ Error rendering {widget.type}: {error.message}
+      </div>;
+    }
   };
 
   // No permissions message

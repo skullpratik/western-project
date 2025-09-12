@@ -3,20 +3,51 @@ import React from 'react';
 import "../Interface.css";
 
 export const LightWidget = ({ config, api }) => {
-  const { lights = [] } = config;
+  // Check both config.lights and config.metadata.lights - prioritize non-empty arrays
+  const lights = (config.lights && config.lights.length > 0) ? config.lights : (config.metadata?.lights || []);
   const [lightsState, setLightsState] = React.useState({});
 
-  // Initialize lights state
+  // Enhanced debug logging
+  React.useEffect(() => {
+    console.log('💡 LightWidget Enhanced Debug:');
+    console.log('  - FULL config object:', config);
+    console.log('  - config.lights:', config.lights);
+    console.log('  - config.metadata.lights:', config.metadata?.lights);
+    console.log('  - MERGED lights result:', lights);
+    console.log('  - lights.length:', lights.length);
+    console.log('  - lights array type:', Array.isArray(lights));
+    
+    if (lights.length > 0) {
+      console.log('  - ✅ LIGHTS FOUND!');
+      lights.forEach((light, i) => {
+        console.log(`  - Light ${i}:`, light);
+      });
+    } else {
+      console.log('  - ❌ NO LIGHTS FOUND anywhere');
+    }
+  }, [JSON.stringify(config)]); // Watch entire config object changes
+
+  // Initialize lights state - use JSON string to avoid infinite loops
   React.useEffect(() => {
     const initialState = {};
     lights.forEach(light => {
       initialState[light.name] = light.defaultState === "on";
     });
     setLightsState(initialState);
-  }, [lights]);
+  }, [JSON.stringify(lights)]); // Use JSON.stringify to avoid infinite loops on array changes
 
   if (!lights || lights.length === 0) {
-    return null;
+    return (
+      <div className="widget-container">
+        <div className="widget-title">💡 Lights Control</div>
+        <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+          <p>⚠️ No lights configured for this model</p>
+          <p style={{ fontSize: '12px' }}>
+            Lights need to be configured in the model's database entry
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const toggleLight = (lightName, newState) => {
