@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './UserManagement.css';
 
+const API_BASE_URL = 'http://localhost:5000';
+
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,7 +18,7 @@ const UserManagement = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-  const response = await fetch('/api/admin-dashboard/users', {
+  const response = await fetch(`${API_BASE_URL}/api/admin-dashboard/users`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -70,7 +72,7 @@ const UserManagement = () => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-  const response = await fetch(`/api/admin-dashboard/users/${editingUser._id}/permissions`, {
+  const response = await fetch(`${API_BASE_URL}/api/admin-dashboard/users/${editingUser._id}/permissions`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -98,7 +100,7 @@ const UserManagement = () => {
   const handleToggleActive = async (userId) => {
     try {
       const token = localStorage.getItem('token');
-  const response = await fetch(`/api/admin-dashboard/users/${userId}/toggle-active`, {
+  const response = await fetch(`${API_BASE_URL}/api/admin-dashboard/users/${userId}/toggle-active`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -126,7 +128,7 @@ const UserManagement = () => {
 
     try {
       const token = localStorage.getItem('token');
-  const response = await fetch(`/api/admin-dashboard/users/${userId}`, {
+  const response = await fetch(`${API_BASE_URL}/api/admin-dashboard/users/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

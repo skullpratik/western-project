@@ -55,53 +55,154 @@ function MainApp() {
   }, []);
 
   // Convert database models to the format expected by Experience component
+  // Helper to normalize asset/model URLs in configs to absolute API URLs
+  const normalizeModelUrls = useCallback((cfg) => {
+    if (!cfg || typeof cfg !== 'object') return cfg;
+    const out = { ...cfg };
+    const fix = (val) => {
+      if (!val || typeof val !== 'string') return val;
+      if (val.startsWith('http://') || val.startsWith('https://')) return val;
+      if (val.startsWith('/models/')) return `${API_BASE_URL}${val}`;
+      if (val.startsWith('models/')) return `${API_BASE_URL}/${val}`;
+      return val;
+    };
+    if (out.path) out.path = fix(out.path);
+    if (out.assets && typeof out.assets === 'object') {
+      out.assets = { ...out.assets };
+      Object.keys(out.assets).forEach((k) => {
+        out.assets[k] = fix(out.assets[k]);
+      });
+    }
+    return out;
+  }, []);
+
+  // Helper to unwrap external configs that might be nested (e.g., { Visicooler: { ... } } or { model:"Visicooler", config:{...} })
+  const unwrapExternalConfig = useCallback((name, json) => {
+    if (!json || typeof json !== 'object') return json;
+    // Direct shape already?
+    const looksDirect = json.camera || json.uiWidgets || json.assets || json.path || json.interactionGroups || json.presets || json.metadata;
+    if (looksDirect) return json;
+
+    // Try exact key match
+    if (json[name] && typeof json[name] === 'object') return json[name];
+
+    // Try case-insensitive key match
+    const key = Object.keys(json).find((k) => k.toLowerCase() === String(name).toLowerCase());
+    if (key && typeof json[key] === 'object') return json[key];
+
+    // Common wrappers
+    if (json.config && typeof json.config === 'object') return json.config;
+    if (json.data && typeof json.data === 'object') return json.data;
+    if (json.models && json.models[name] && typeof json.models[name] === 'object') return json.models[name];
+
+    return json; // fallback as-is
+  }, []);
+
   const dbModelsFormatted = useMemo(() => {
     const formatted = {};
     dbModels.forEach(model => {
-      console.log('🔧 Processing model:', model.name, 'metadata:', model.metadata);
-      console.log('🔧 Model uiWidgets (top level):', model.uiWidgets);
-      console.log('🔧 Model metadata.uiWidgets:', model.metadata?.uiWidgets);
-      console.log('🔧 Final uiWidgets will be:', model.uiWidgets || model.metadata?.uiWidgets || []);
-      console.log('💡 Model lights (top level):', model.lights);
-      console.log('💡 Model metadata.lights:', model.metadata?.lights);
-      console.log('💡 Final lights will be:', model.lights || model.metadata?.lights || []);
-      console.log('↘ transform from API:', {
-        placementMode: model.placementMode,
-        modelPosition: model.modelPosition,
-        modelRotation: model.modelRotation,
-        modelScale: model.modelScale
-      });
-      formatted[model.name] = {
-        path: model.file,
+      // New approach: developer-provided config JSON drives metadata; admin only attaches file and configUrl
+      const configUrl = model.configUrl;
+      // Normalize file path:
+      // - If backend already sends absolute URL (http/https), use it as-is
+      // - If it starts with '/models/', prefix server base URL
+      // - Otherwise treat as a filename and build a full URL
+      let normalizedPath = undefined;
+      if (typeof model.file === 'string' && model.file.length) {
+        if (model.file.startsWith('http://') || model.file.startsWith('https://')) {
+          normalizedPath = model.file;
+        } else if (model.file.startsWith('/models/')) {
+          normalizedPath = `${API_BASE_URL}${model.file}`;
+        } else {
+          normalizedPath = `${API_BASE_URL}/models/${model.file}`;
+        }
+      }
+      const baseModelFields = {
+        path: normalizedPath,
         displayName: model.displayName,
         type: model.type,
-        interactionGroups: model.interactionGroups || [],
-        metadata: model.metadata || {},
-        // Extract uiWidgets from both top level and metadata (fallback for older models)
-        uiWidgets: model.uiWidgets || model.metadata?.uiWidgets || [],
-        // Extract other properties from top level and metadata (fallback for older models)
-        lights: model.lights || model.metadata?.lights || [],
-        hiddenInitially: model.hiddenInitially || model.metadata?.hiddenInitially || [],
-        camera: model.metadata?.camera || { position: [0, 2, 5], target: [0, 1, 0], fov: 50 },
-        // Extract model positioning from database model
-  placementMode: model.placementMode || 'autofit',
-  modelPosition: Array.isArray(model.modelPosition) ? model.modelPosition : undefined,
-  modelRotation: Array.isArray(model.modelRotation) ? model.modelRotation : undefined,
-  modelScale: typeof model.modelScale === 'number' ? model.modelScale : undefined
       };
-  console.log('Formatted model:', formatted[model.name]);
+      formatted[model.name] = { ...baseModelFields, __configUrl: configUrl };
     });
-    console.log('DB MODELS FORMATTED:', formatted); // Debug log
+    console.log('DB MODELS FORMATTED (basic):', formatted); // Debug log
     return formatted;
   }, [dbModels]);
 
-  const mergedModels = useMemo(() => ({ ...modelsConfig, ...dbModelsFormatted }), [dbModelsFormatted]);
+  // Load external config JSONs on demand and merge with base fields
+  const [externalConfigs, setExternalConfigs] = useState({}); // { [modelName]: configJson }
+
+  useEffect(() => {
+    let aborted = false;
+    const loadConfigs = async () => {
+      const entries = Object.entries(dbModelsFormatted);
+      await Promise.all(entries.map(async ([name, base]) => {
+        const url = base.__configUrl;
+        if (!url) return; // no external config attached
+        try {
+          const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+          console.log(`[ConfigFetch] ${name} → ${fullUrl}`);
+          const res = await fetch(fullUrl);
+          if (!res.ok) throw new Error(`Fetch ${fullUrl} failed ${res.status}`);
+          const json = await res.json();
+          const unwrapped = unwrapExternalConfig(name, json);
+          const normalized = normalizeModelUrls(unwrapped);
+          console.log(`[ConfigFetchSuccess] ${name} (unwrapped/normalized)`, normalized);
+          if (!aborted) {
+            setExternalConfigs(prev => ({ ...prev, [name]: normalized }));
+          }
+        } catch (e) {
+          console.warn('[ConfigFetchError]', name, e);
+        }
+      }));
+    };
+    loadConfigs();
+    return () => { aborted = true; };
+  }, [dbModelsFormatted, unwrapExternalConfig, normalizeModelUrls]);
+
+  const mergedModels = useMemo(() => {
+    // Merge static developer config (fallback), db basic, and external JSON if present
+    const merged = { ...modelsConfig };
+    Object.entries(dbModelsFormatted).forEach(([name, base]) => {
+      const ext = externalConfigs[name];
+      if (ext) {
+        // Prefer external config, but if it doesn't include a model path or assets.base,
+        // auto-fill the path from the admin-uploaded file for convenience.
+        const combined = { ...ext };
+        const hasAssetsBase = !!(combined.assets && combined.assets.base);
+        if (!hasAssetsBase && !combined.path && base.path) {
+          combined.path = base.path;
+        }
+        merged[name] = combined;
+        console.log('[MergedModel] Using external config for', name, combined);
+      } else {
+        // No external config: fall back to static if exists, else use base path only
+        merged[name] = modelsConfig[name] ? normalizeModelUrls({ ...modelsConfig[name] }) : normalizeModelUrls({ path: base.path });
+        console.log('[MergedModel] No external config for', name, merged[name]);
+      }
+    });
+    return merged;
+  }, [dbModelsFormatted, externalConfigs, normalizeModelUrls]);
 
   const [selectedModel, setSelectedModel] = useState(() => {
     const saved = localStorage.getItem('selectedModel');
-    // Check if saved model exists in static config first, fallback to null if no models available
-    return saved && modelsConfig[saved] ? saved : null;
+    // Start with saved if it exists in static config; we'll revalidate against DB after load
+    return saved && modelsConfig[saved] ? saved : "Undercounter";
   });
+
+  // After DB models load, ensure we have a valid selection; prefer a DB model (often the one just created)
+  useEffect(() => {
+    const allKeys = Object.keys(mergedModels);
+    if (!allKeys.length) return;
+
+    if (!mergedModels[selectedModel]) {
+      // Prefer first DB model if available
+      const dbKeys = Object.keys(dbModelsFormatted);
+      const next = dbKeys[0] || allKeys[0];
+      setSelectedModel(next);
+      try { localStorage.setItem('selectedModel', next); } catch(_) {}
+      console.log('🔁 Auto-selected model:', next);
+    }
+  }, [mergedModels, dbModelsFormatted, selectedModel]);
   const [api, setApi] = useState(null);
   const [showActivityLog, setShowActivityLog] = useState(false);
 
@@ -120,19 +221,10 @@ function MainApp() {
   const [reflectionActive, setReflectionActive] = useState(false);
 
   // Get current model configuration from merged set
-  const currentModel = selectedModel ? mergedModels[selectedModel] : null;
+  const currentModel = mergedModels[selectedModel] || mergedModels["Undercounter"];
 
   // User permissions
   const userPermissions = user?.permissions || {};
-
-  // Auto-select first available model when models are loaded and no model is selected
-  useEffect(() => {
-    if (!selectedModel && Object.keys(mergedModels).length > 0) {
-      const firstModel = Object.keys(mergedModels)[0];
-      setSelectedModel(firstModel);
-      try { localStorage.setItem('selectedModel', firstModel); } catch(_) {}
-    }
-  }, [mergedModels, selectedModel]);
 
   // Update position when changing models
   useEffect(() => {
@@ -148,7 +240,7 @@ function MainApp() {
       const token = localStorage.getItem("token");
       if (!token) return;
 
-  await fetch(`/api/activity/log`, {
+  await fetch(`${API_BASE_URL}/api/activity/log`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -188,45 +280,6 @@ function MainApp() {
           <div className="loading-state">
             <h2>Loading models...</h2>
             <p>Fetching available 3D models from server</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Show empty state if no models are available
-  if (Object.keys(mergedModels).length === 0) {
-    return (
-      <div className="main-app">
-        <div className="app-content">
-          <div className="empty-state">
-            <h2>No models available</h2>
-            <p>No 3D models found. Please add models through the admin panel.</p>
-            {userPermissions.canManageModels && (
-              <button 
-                onClick={() => {
-                  // This will be handled by the Interface component's admin panel
-                  window.dispatchEvent(new CustomEvent('openAdminPanel'));
-                }}
-                className="add-model-button"
-              >
-                Add Your First Model
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Show loading state if models exist but no model is selected yet
-  if (!selectedModel || !currentModel) {
-    return (
-      <div className="main-app">
-        <div className="app-content">
-          <div className="loading-state">
-            <h2>Initializing...</h2>
-            <p>Setting up 3D viewer</p>
           </div>
         </div>
       </div>

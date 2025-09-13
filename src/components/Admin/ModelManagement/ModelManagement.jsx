@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGLTF } from '@react-three/drei';
-import AddModelModalEnhanced from './AddModelModal_Enhanced';
+import AddModelModalSimple from './AddModelModal_Simple.jsx';
 import { modelsConfig } from '../../../modelsConfig';
 import './ModelManagement.css';
 
@@ -10,19 +10,7 @@ const API_BASE_URL = 'http://localhost:5000';
 const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
   const [open, setOpen] = useState(false);
 
-  const presetSummary = useMemo(() => {
-    if (!config.presets?.doorSelections) return null;
-    const groups = config.presets.doorSelections;
-    let totalVariants = 0;
-    let maxDoorsOption = 0;
-    Object.values(groups).forEach(level => {
-      Object.values(level).forEach(opt => {
-        totalVariants += 1;
-        maxDoorsOption = Math.max(maxDoorsOption, opt.doors?.length || 0);
-      });
-    });
-    return { groupCount: Object.keys(groups).length, totalVariants, maxDoorsOption };
-  }, [config.presets]);
+  const presetSummary = null; // Removed from admin view in simplified flow
 
   return (
     <div className={`model-card ${open ? 'expanded' : ''}`}>
@@ -40,7 +28,7 @@ const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
                   e.stopPropagation();
                   onEdit(config);
                 }}
-                title="Edit model metadata"
+                title="Edit model"
               >
                 ✏️
               </button>
@@ -77,87 +65,24 @@ const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
             <span className="detail-label">UI Widgets</span>
             <span className="detail-value">{config.uiWidgets?.length || 0}</span>
           </div>
-          {presetSummary && (
-            <div className="detail-item">
-              <span className="detail-label">Door Presets</span>
-              <span className="detail-value">{presetSummary.totalVariants}</span>
+          {config.configUrl ? (
+            <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
+              <span className="detail-label">Config URL</span>
+              <span className="detail-value" title={config.configUrl}>{config.configUrl}</span>
             </div>
-          )}
+          ) : null}
+          {/* Door presets summary removed in simplified admin */}
         </div>
 
         {open && (
           <div className="model-extra">
-            {config.assets && (
-              <section>
-                <h4>Assets</h4>
-                <ul className="simple-list">
-                  {Object.entries(config.assets).map(([k,v]) => (
-                    <li key={k}><strong>{k}</strong>: <span className="mono">{v}</span></li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {config.camera && (
-              <section>
-                <h4>Camera</h4>
-                <div className="kv-pair"><span>Position</span><code>{JSON.stringify(config.camera.position)}</code></div>
-                <div className="kv-pair"><span>Target</span><code>{JSON.stringify(config.camera.target)}</code></div>
-                <div className="kv-pair"><span>FOV</span><code>{config.camera.fov}</code></div>
-              </section>
-            )}
-            {config.lights?.length > 0 && (
-              <section>
-                <h4>Lights ({config.lights.length})</h4>
-                <ul className="chips">
-                  {config.lights.map((l,i)=>(
-                    <li key={i} className="chip">{l.name} <span className="muted">{l.defaultState}</span> <span className="muted">{l.intensity??''}</span></li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {config.hiddenInitially?.length > 0 && (
-              <section>
-                <h4>Initially Hidden ({config.hiddenInitially.length})</h4>
-                <div className="scroll-box">
-                  {config.hiddenInitially.map(p => <span key={p} className="tag">{p}</span>)}
-                </div>
-              </section>
-            )}
-            {config.interactionGroups?.length > 0 && (
-              <section>
-                <h4>Interaction Groups ({config.interactionGroups.length})</h4>
-                <div className="interaction-groups full">
-                  {config.interactionGroups.map((group,gi)=>(
-                    <div key={gi} className="interaction-group column">
-                      <div className="group-head"><span className="group-type">{group.type}</span><span className="group-label">{group.label}</span><span className="group-parts">{group.parts.length} parts</span></div>
-                      <ul className="part-list">
-                        {group.parts.map((p,pi)=>(
-                          <li key={pi} className="part-line"><code>{p.name}</code>{p.rotationAxis && <span className="muted"> rot:{p.rotationAxis}@{p.openAngle}</span>}{p.positionAxis && <span className="muted"> move:{p.positionAxis}@{p.openPosition}</span>}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-            {config.uiWidgets?.length > 0 && (
-              <section>
-                <h4>UI Widgets ({config.uiWidgets.length})</h4>
-                <ul className="simple-list">
-                  {config.uiWidgets.map((w,i)=>(
-                    <li key={i}><strong>{w.type}</strong>{w.title ? ` – ${w.title}` : ''}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {presetSummary && (
-              <section>
-                <h4>Door Presets</h4>
-                <div className="kv-pair"><span>Preset Groups</span><code>{presetSummary.groupCount}</code></div>
-                <div className="kv-pair"><span>Total Variants</span><code>{presetSummary.totalVariants}</code></div>
-                <div className="kv-pair"><span>Max Doors in Variant</span><code>{presetSummary.maxDoorsOption}</code></div>
-              </section>
-            )}
+            {/* Asset and metadata details hidden from admin */}
+            
+            
+            
+            
+            
+            
           </div>
         )}
       </div>
@@ -217,6 +142,7 @@ const ModelManagement = () => {
         path: `${API_BASE_URL}/models/${model.file}`,
         displayName: model.displayName,
         type: model.type,
+        configUrl: model.configUrl,
         interactionGroups: model.interactionGroups || [],
         metadata: model.metadata || {},
         uploadedBy: model.uploadedBy,
@@ -277,24 +203,9 @@ const ModelManagement = () => {
   };
 
   const handleEditModel = (config) => {
-    // Find the original model data from dbModels
-    const originalModel = dbModels.find(model => model._id === config.id);
+    const originalModel = dbModels.find(model => model._id === (config.id || config._id));
     if (originalModel) {
-      // Create a properly formatted model object for editing
-      const editModelData = {
-        ...originalModel,
-        file: originalModel.file, // Use the actual file path from DB
-        name: originalModel.name,
-        // Extract camera data from metadata if it's there, or use top-level
-        camera: originalModel.camera || originalModel.metadata?.camera,
-        lights: originalModel.lights || originalModel.metadata?.lights || [],
-        hiddenInitially: originalModel.hiddenInitially || originalModel.metadata?.hiddenInitially || [],
-        uiWidgets: originalModel.uiWidgets || originalModel.metadata?.uiWidgets || [],
-        assets: originalModel.assets,
-        interactionGroups: originalModel.interactionGroups || []
-      };
-      console.log('Setting edit model with camera data:', editModelData.camera);
-      setEditModel(editModelData);
+      setEditModel(originalModel);
       setShowEdit(true);
     }
   };
@@ -419,7 +330,7 @@ const ModelManagement = () => {
       </div>
       <div className="toolbar-row" style={{display:'flex', gap:8}}>
         <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model</button>
-        <button className="btn-secondary" onClick={()=>navigate('/admin/models/generator')}>Open Model Generator</button>
+  {/* Generator access removed */}
       </div>
       <div className="models-grid">
         {modelEntries.map(([modelName, config]) => (
@@ -433,9 +344,9 @@ const ModelManagement = () => {
           />
         ))}
       </div>
-      {showAdd && <AddModelModalEnhanced onClose={()=>setShowAdd(false)} onAdd={handleAddModel} />}
+  {showAdd && <AddModelModalSimple onClose={()=>setShowAdd(false)} onAdd={handleAddModel} />}
       {showEdit && editModel && (
-        <AddModelModalEnhanced 
+        <AddModelModalSimple 
           onClose={() => {
             setShowEdit(false);
             setEditModel(null);

@@ -5,11 +5,18 @@
 // - Add widgets and lights manually
 // - Import existing JSON and preview/export final JSON
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { Experience } from '../Experience/Experience.jsx';
+import { useLocation } from 'react-router-dom';
 
 const emptyAssets = { base: '', doors: '', glassDoors: '', drawers: '' };
 
 export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const editId = params.get('id');
+  const isEditMode = !!editId;
   // Core
   const [name, setName] = useState('');
   const [assets, setAssets] = useState(emptyAssets);
@@ -18,6 +25,7 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
   const [uploading, setUploading] = useState({}); // { base: boolean, doors: boolean, glassDoors: boolean, drawers: boolean }
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'info'|'success'|'error', msg: string }
+  const [loadingModel, setLoadingModel] = useState(false);
 
   // Drawers
   const [drawerTargetGroups, setDrawerTargetGroups] = useState([]);
@@ -314,34 +322,35 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
       const token = localStorage.getItem('token');
       const baseHeaders = token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 
-      // 1) Create minimal model (backend requires name + path)
-      const createRes = await fetch('http://localhost:5000/api/admin/models', {
-        method: 'POST',
-        headers: baseHeaders,
-        body: JSON.stringify({
-          name,
-          path: primaryPath,
-          placementMode: finalConfig.placementMode,
-          camera: finalConfig.camera,
-          hiddenInitially: finalConfig.hiddenInitially,
-          lights: finalConfig.lights,
-          uiWidgets: finalConfig.uiWidgets,
-          interactionGroups: finalConfig.interactionGroups
-        })
-      });
-      if (!createRes.ok) {
-        const err = await createRes.json().catch(() => ({}));
-        throw new Error(err.message || `Create failed (${createRes.status})`);
-      }
-      const created = await createRes.json();
-      const id = created?.model?._id || created?.model?.id;
-      if (!id) {
-        throw new Error('Create succeeded but no model ID returned');
+      let targetId = editId;
+      if (!isEditMode) {
+        // 1) Create minimal model (backend requires name + path)
+        const createRes = await fetch('http://localhost:5000/api/admin/models', {
+          method: 'POST',
+          headers: baseHeaders,
+          body: JSON.stringify({
+            name,
+            path: primaryPath,
+            placementMode: finalConfig.placementMode,
+            camera: finalConfig.camera,
+            hiddenInitially: finalConfig.hiddenInitially,
+            lights: finalConfig.lights,
+            uiWidgets: finalConfig.uiWidgets,
+            interactionGroups: finalConfig.interactionGroups
+          })
+        });
+        if (!createRes.ok) {
+          const err = await createRes.json().catch(() => ({}));
+          throw new Error(err.message || `Create failed (${createRes.status})`);
+        }
+        const created = await createRes.json();
+        targetId = created?.model?._id || created?.model?.id;
+        if (!targetId) throw new Error('Create succeeded but no model ID returned');
       }
 
       // 2) Update with full config (assets, presets, etc.)
       const payloadPresets = { ...(finalConfig.presets || {}), doorTypeMap: finalConfig.doorTypeMap || {} };
-      const updateRes = await fetch(`http://localhost:5000/api/admin/models/${id}`, {
+      const updateRes = await fetch(`http://localhost:5000/api/admin/models/${targetId}`, {
         method: 'PUT',
         headers: baseHeaders,
         body: JSON.stringify({
@@ -374,6 +383,78 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
       setSaving(false);
     }
   };
+
+  // Load existing model if editing
+  useEffect(() => {
+    const loadForEdit = async () => {
+      if (!isEditMode) return;
+      try {
+        setLoadingModel(true);
+        const token = localStorage.getItem('token');
+        const res = await fetch(`http://localhost:5000/api/admin/models`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+        });
+        if (!res.ok) throw new Error(`Failed to fetch models (${res.status})`);
+        const models = await res.json();
+        const model = models.find(m => m._id === editId);
+        if (!model) throw new Error('Model not found');
+
+        // Populate fields
+        setName(model.name || '');
+        setAssets(model.assets || emptyAssets);
+        const cam = model.camera || model.metadata?.camera;
+        if (cam) setCamera(cam);
+        setHiddenInitially(model.hiddenInitially || model.metadata?.hiddenInitially || []);
+
+        const ig = model.interactionGroups || [];
+        // Doors
+        const doorGroup = ig.find(g => g.type === 'doors');
+        if (doorGroup?.parts?.length) {
+          const doors = doorGroup.parts.map(p => p.name);
+          setSolidDoors(doors); // we can't infer glass vs solid reliably; keep as solids for edit
+          const cfg = {};
+          doorGroup.parts.forEach(p => { cfg[p.name] = { axis: p.rotationAxis || 'y', angle: p.openAngle ?? 90 }; });
+          setDoorConfig(cfg);
+        }
+        // Drawers
+        const drawersGroup = ig.find(g => g.type === 'drawers');
+        if (drawersGroup?.parts?.length) {
+          setDrawerTargetGroups(drawersGroup.parts.map(p => p.name));
+          const first = drawersGroup.parts[0];
+          setDrawerOpenZ(first?.openPosition ?? 0);
+        }
+        setDrawerClosedZ(model.metadata?.drawers?.closedZ ?? 0);
+
+        // Panels & glass panels
+        setPanels(model.metadata?.panels || []);
+        setGlassPanels(model.metadata?.glassPanels || []);
+        setSolidDoorMeshPrefixes(model.metadata?.solidDoorMeshPrefixes || []);
+
+        // Presets with doorTypeMap if present
+        const pc = {};
+        const ds = model.presets?.doorSelections || {};
+        Object.entries(ds).forEach(([dc, positions]) => {
+          pc[dc] = {};
+          Object.entries(positions || {}).forEach(([pos, cfg]) => {
+            pc[dc][pos] = { doors: cfg.doors || [], panels: cfg.panels || [], hide: cfg.hide || [] };
+          });
+        });
+        setPositionConfigs(pc);
+        setToGlass(model.presets?.doorTypeMap?.toGlass || model.doorTypeMap?.toGlass || {});
+        setToSolid(model.presets?.doorTypeMap?.toSolid || model.doorTypeMap?.toSolid || {});
+
+        // Widgets & lights
+        setUiWidgets(model.uiWidgets || model.metadata?.uiWidgets || []);
+        setLights(model.lights || model.metadata?.lights || []);
+      } catch (e) {
+        console.error('Edit load failed:', e);
+        setFeedback({ type: 'error', msg: e.message });
+      } finally {
+        setLoadingModel(false);
+      }
+    };
+    loadForEdit();
+  }, [isEditMode, editId]);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
@@ -501,6 +582,7 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
             {uiWidgets.map((w, i) => (
               <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
                 <select value={w.type} onChange={(e) => setUiWidgets((arr) => { const copy = [...arr]; copy[i] = { ...copy[i], type: e.target.value }; return copy; })}>
+                  <option value="doorPresets">Door Presets</option>
                   <option value="lightWidget">Light Widget</option>
                   <option value="globalTextureWidget">Global Texture Widget</option>
                   <option value="textureWidget">Texture Widget</option>
@@ -554,8 +636,38 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
       </div>
 
       <aside style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
+        <h3>Live Preview</h3>
+        <div style={{ height: 320, marginBottom: 12 }}>
+          <Canvas shadows camera={{ position: [2,2,2], fov: 35 }}>
+            <Experience
+              modelName={name || 'Preview'}
+              modelConfig={{
+                assets: {
+                  base: assets.base ? (assets.base.startsWith('http') ? assets.base : `http://localhost:5000${assets.base.startsWith('/models') ? assets.base : `/models/${assets.base}`}`) : undefined,
+                  doors: assets.doors ? (assets.doors.startsWith('http') ? assets.doors : `http://localhost:5000${assets.doors.startsWith('/models') ? assets.doors : `/models/${assets.doors}`}`) : undefined,
+                  glassDoors: assets.glassDoors ? (assets.glassDoors.startsWith('http') ? assets.glassDoors : `http://localhost:5000${assets.glassDoors.startsWith('/models') ? assets.glassDoors : `/models/${assets.glassDoors}`}`) : undefined,
+                  drawers: assets.drawers ? (assets.drawers.startsWith('http') ? assets.drawers : `http://localhost:5000${assets.drawers.startsWith('/models') ? assets.drawers : `/models/${assets.drawers}`}`) : undefined,
+                },
+                camera,
+                hiddenInitially,
+                interactionGroups: finalConfig.interactionGroups,
+                presets: finalConfig.presets,
+                doorTypeMap: finalConfig.doorTypeMap,
+                uiWidgets,
+                lights,
+                placementMode: 'autofit'
+              }}
+              allModels={{}}
+              onTogglePart={() => {}}
+              onApiReady={() => {}}
+              applyRequest={{ current: null }}
+              userPermissions={{ canRotate: true, canZoom: true, canPan: true }}
+              user={{ role: 'admin' }}
+            />
+          </Canvas>
+        </div>
         <h3>Preview JSON</h3>
-        <pre style={{ maxHeight: '75vh', overflow: 'auto' }}>{JSON.stringify(finalConfig, null, 2)}</pre>
+        <pre style={{ maxHeight: '40vh', overflow: 'auto' }}>{JSON.stringify(finalConfig, null, 2)}</pre>
       </aside>
 
       <style jsx>{`

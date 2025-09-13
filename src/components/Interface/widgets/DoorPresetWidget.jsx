@@ -1,13 +1,35 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import "../Interface.css";
 
 export function DoorPresetWidget({ config, api }) {
-  const presets = config?.presets;
-  const [doorCount, setDoorCount] = useState("");
-  const [doorPosition, setDoorPosition] = useState("");
+  const doorSelections = config?.presets?.doorSelections || {};
+
+  // Derive available counts and positions from presets to reflect configurator
+  const availableCounts = useMemo(
+    () => Object.keys(doorSelections).map((k) => Number(k)).sort((a, b) => a - b),
+    [doorSelections]
+  );
+  const [doorCount, setDoorCount] = useState(availableCounts[0] || "");
+  const positionsForCount = useMemo(
+    () => (doorCount ? Object.keys(doorSelections[String(doorCount)] || {}).map((k) => Number(k)).sort((a, b) => a - b) : []),
+    [doorSelections, doorCount]
+  );
+  const [doorPosition, setDoorPosition] = useState(positionsForCount[0] || "");
   const [doorType, setDoorType] = useState("solid");
 
-  if (!presets) return null;
+  // Keep selection valid when config changes
+  React.useEffect(() => {
+    if (!availableCounts.includes(doorCount)) {
+      setDoorCount(availableCounts[0] || "");
+    }
+  }, [availableCounts]);
+  React.useEffect(() => {
+    if (!positionsForCount.includes(doorPosition)) {
+      setDoorPosition(positionsForCount[0] || "");
+    }
+  }, [positionsForCount]);
+
+  if (!Object.keys(doorSelections).length) return null;
 
   return (
     <div className="widget-container">
@@ -16,50 +38,39 @@ export function DoorPresetWidget({ config, api }) {
       <div className="preset-controls">
         <div className="form-group">
           <label className="form-label">Number of Doors</label>
-          <select 
+          <select
             className="interface-select"
-            value={doorCount} 
+            value={doorCount}
             onChange={(e) => setDoorCount(Number(e.target.value))}
           >
             <option value="">Select Count</option>
-            <option value={1}>1 Door</option>
-            <option value={2}>2 Doors</option>
-            <option value={3}>3 Doors</option>
+            {availableCounts.map((c) => (
+              <option key={c} value={c}>{c} {c === 1 ? 'Door' : 'Doors'}</option>
+            ))}
           </select>
         </div>
 
-        {(doorCount === 1 || doorCount === 2) && (
+        {positionsForCount.length > 0 && (
           <div className="form-group">
             <label className="form-label">Door Position</label>
-            <select 
+            <select
               className="interface-select"
-              value={doorPosition} 
+              value={doorPosition}
               onChange={(e) => setDoorPosition(Number(e.target.value))}
             >
               <option value="">Select Position</option>
-              {doorCount === 1 && (
-                <>
-                  <option value={1}>Left Side</option>
-                  <option value={2}>Center</option>
-                  <option value={3}>Right Side</option>
-                </>
-              )}
-              {doorCount === 2 && (
-                <>
-                  <option value={1}>Left + Center</option>
-                  <option value={2}>Left + Right</option>
-                  <option value={3}>Center + Right</option>
-                </>
-              )}
+              {positionsForCount.map((p) => (
+                <option key={p} value={p}>Position {p}</option>
+              ))}
             </select>
           </div>
         )}
 
         <div className="form-group">
           <label className="form-label">Door Type</label>
-          <select 
+          <select
             className="interface-select"
-            value={doorType} 
+            value={doorType}
             onChange={(e) => setDoorType(e.target.value)}
           >
             <option value="solid">🚪 Solid Door</option>
@@ -67,14 +78,13 @@ export function DoorPresetWidget({ config, api }) {
           </select>
         </div>
 
-        <button 
+        <button
           className="interface-button btn-full-width"
           onClick={() => {
-            const pos = doorCount === 3 ? 1 : doorPosition;
-            if (!doorCount || !pos) return;
-            api?.applyDoorSelection?.(doorCount, pos, doorType);
+            if (!doorCount || !doorPosition) return;
+            api?.applyDoorSelection?.(doorCount, doorPosition, doorType);
           }}
-          disabled={!doorCount || (doorCount !== 3 && !doorPosition)}
+          disabled={!doorCount || !doorPosition}
         >
           ✨ Apply Configuration
         </button>

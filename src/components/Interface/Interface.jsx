@@ -27,7 +27,24 @@ export function Interface({
   // Current model config from provided map
   const config = models[selectedModel] || {};
   const allWidgets = React.useMemo(() => {
-    const rawWidgets = config.uiWidgets || [];
+    // Merge widgets from both direct and metadata locations
+    let rawWidgets = [];
+    if (Array.isArray(config.uiWidgets)) rawWidgets = rawWidgets.concat(config.uiWidgets);
+    if (Array.isArray(config.metadata?.uiWidgets)) rawWidgets = rawWidgets.concat(config.metadata.uiWidgets);
+
+    // If the model has door presets but no doorPresets widget configured, inject it automatically
+    const hasDoorPresetsConfig = !!config?.presets?.doorSelections && Object.keys(config.presets.doorSelections).length > 0;
+    const hasDoorWidget = rawWidgets.some(w => w.type === 'doorPresets');
+    if (hasDoorPresetsConfig && !hasDoorWidget) {
+      rawWidgets = [{ type: 'doorPresets', title: 'Door Presets' }, ...rawWidgets];
+    }
+
+    // If lights are defined but no light widget configured, inject a default light widget
+    const hasLights = (Array.isArray(config.lights) && config.lights.length > 0) || (Array.isArray(config.metadata?.lights) && config.metadata.lights.length > 0);
+    const hasLightWidget = rawWidgets.some(w => w.type === 'lightWidget');
+    if (hasLights && !hasLightWidget) {
+      rawWidgets = [...rawWidgets, { type: 'lightWidget', title: 'Lights' }];
+    }
     
     console.log(`🔍 INTERFACE WIDGET FILTERING DEBUG:`);
     console.log(`  - selectedModel: ${selectedModel}`);
@@ -57,7 +74,7 @@ export function Interface({
     console.log(`  - Final uniqueWidgets:`, uniqueWidgets);
     
     return uniqueWidgets;
-  }, [config.uiWidgets, selectedModel]);
+  }, [config.uiWidgets, config.metadata?.uiWidgets, selectedModel]);
 
   // Enhanced widget debugging
   React.useEffect(() => {
@@ -341,7 +358,7 @@ export function Interface({
           </div>
           <div className="info-item">
             <span className="info-label">Interactive Groups:</span>
-            <span className="info-value">{config.interactionGroups?.length || 0}</span>
+            <span className="info-value">{config.interactionGroups?.length || config.metadata?.interactionGroups?.length || 0}</span>
           </div>
         </div>
       </div>

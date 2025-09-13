@@ -52,22 +52,35 @@ export function Experience({
   const allObjects = useRef({});
   const clickHelpers = useRef(new Map());
 
-  // Load model(s) first so they exist for subsequent effects
-  const baseScene = config.assets?.base ? useGLTF(config.assets.base)?.scene : null;
-  const doorsScene = config.assets?.doors ? useGLTF(config.assets.doors)?.scene : null;
-  const glassDoorsScene = config.assets?.glassDoors ? useGLTF(config.assets.glassDoors)?.scene : null;
-  const drawersScene = config.assets?.drawers ? useGLTF(config.assets.drawers)?.scene : null;
-  const { scene } = !config.assets ? useGLTF(config.path) : { scene: null };
+  // Allow interactionGroups to be provided under metadata as well
+  const interactionGroups = config.interactionGroups || config.metadata?.interactionGroups || [];
+
+  // Load the main model (base model)
+  console.log('Loading main model from:', config.path);
+  const { scene: mainScene } = useGLTF(config.path);
+  console.log('Main scene loaded:', mainScene ? 'success' : 'failed');
+
+  // Load additional assets dynamically (only if they exist in config.assets)
+  const doorsScene = config.assets?.doors ? useGLTF(config.assets.doors).scene : null;
+  const drawersScene = config.assets?.drawers ? useGLTF(config.assets.drawers).scene : null;
+  const glassDoorsScene = config.assets?.glassDoors ? useGLTF(config.assets.glassDoors).scene : null;
+  const otherScene = config.assets?.other ? useGLTF(config.assets.other).scene : null;
+
+  // Combine main scene with asset scenes for placement calculations
+  const allScenes = { base: mainScene };
+  if (doorsScene) allScenes.doors = doorsScene;
+  if (drawersScene) allScenes.drawers = drawersScene;
+  if (glassDoorsScene) allScenes.glassDoors = glassDoorsScene;
+  if (otherScene) allScenes.other = otherScene;
 
   // Placement handling (admin transform preferred; else autofit/focused)
   useEffect(() => {
     if (!modelGroupRef.current) return;
-    if (!(baseScene || scene)) return; // wait until a scene is loaded
+    // Wait until main scene is loaded
+    if (!mainScene) return;
 
     const placementMode = config.placementMode || 'autofit';
-    const group = modelGroupRef.current;
-
-    // Reset any manual transforms first
+    const group = modelGroupRef.current;    // Reset any manual transforms first
     group.position.set(0,0,0);
     group.rotation.set(0,0,0);
     group.scale.set(1,1,1);
@@ -111,8 +124,12 @@ export function Experience({
     config?.modelPosition,
     config?.modelRotation,
     config?.modelScale,
-    baseScene,
-    scene,
+    // Use individual asset scenes
+    mainScene,
+    doorsScene,
+    drawersScene,
+    glassDoorsScene,
+    otherScene,
     camera
   ]);
 
@@ -309,25 +326,26 @@ export function Experience({
   // Support doorTypeMap defined either at top-level or under presets
   const doorTypeMap = config.doorTypeMap || config.presets?.doorTypeMap || {};
 
-    if (baseScene) baseScene.traverse((o) => o.isObject3D && (o.visible = true));
-    if (doorsScene) {
-      doorsScene.traverse((o) => o.isObject3D && (o.visible = false));
-      doorsScene.visible = true;
-    }
-    if (glassDoorsScene) {
-      glassDoorsScene.traverse((o) => o.isObject3D && (o.visible = false));
-      glassDoorsScene.visible = true;
-    }
-    if (drawersScene) drawersScene.traverse((o) => o.isObject3D && (o.visible = true));
+  // Apply visibility based on dynamic asset scenes
+  if (mainScene) mainScene.traverse((o) => o.isObject3D && (o.visible = true));
+  if (doorsScene) {
+    doorsScene.traverse((o) => o.isObject3D && (o.visible = false));
+    doorsScene.visible = true;
+  }
+  if (glassDoorsScene) {
+    glassDoorsScene.traverse((o) => o.isObject3D && (o.visible = false));
+    glassDoorsScene.visible = true;
+  }
+  if (drawersScene) drawersScene.traverse((o) => o.isObject3D && (o.visible = true));
 
-    visibleDoors.forEach((doorName) => {
-      let targetName = doorName;
-      if (showGlass && doorTypeMap?.toGlass?.[doorName]) {
-        targetName = doorTypeMap.toGlass[doorName];
-      }
-      const obj = getObjectByLogicalName(targetName);
-      if (obj) setObjectVisibleRecursive(obj, true);
-    });
+  visibleDoors.forEach((doorName) => {
+    let targetName = doorName;
+    if (showGlass && doorTypeMap?.toGlass?.[doorName]) {
+      targetName = doorTypeMap.toGlass[doorName];
+    }
+    const obj = getObjectByLogicalName(targetName);
+    if (obj) setObjectVisibleRecursive(obj, true);
+  });
 
     visiblePanels.forEach((panelName) => {
       const obj = getObjectByLogicalName(panelName);
@@ -340,8 +358,8 @@ export function Experience({
     });
 
     // ensure drawers initial positions if any
-    if (config.interactionGroups) {
-      config.interactionGroups.forEach((group) => {
+    if (interactionGroups) {
+      interactionGroups.forEach((group) => {
         if (group.type === "drawers") {
           group.parts.forEach((drawer) => {
             const drawerObj = getObjectByLogicalName(drawer.name);
@@ -367,7 +385,7 @@ export function Experience({
       hiddenParts: Array.from(hiddenParts),
       widgetType: "doorPreset"
     });
-  }, [config, baseScene, doorsScene, glassDoorsScene, drawersScene, logInteraction]);
+  }, [config, logInteraction]);
 
   const { togglePart, isInteractiveObject, getInteractionType, findInteractiveObjectName } = useInteractions(
     allObjects, 
@@ -385,7 +403,7 @@ export function Experience({
   // Click helpers & clickable surfaces
   // -----------------------
   useEffect(() => {
-    if (!config.interactionGroups) return;
+    if (!interactionGroups) return;
 
     // cleanup existing
     clickHelpers.current.forEach((helper) => {
@@ -394,7 +412,7 @@ export function Experience({
     clickHelpers.current.clear();
 
     const interactiveObjects = [];
-    config.interactionGroups.forEach((group) => {
+    interactionGroups.forEach((group) => {
       if (Array.isArray(group.parts)) {
         group.parts.forEach((part) => {
           const obj = allObjects.current[part.name];
@@ -432,15 +450,15 @@ export function Experience({
       });
       clickHelpers.current.clear();
     };
-  }, [config, allObjects.current]);
+  }, [config, interactionGroups, allObjects.current]);
 
   // -----------------------
   // Build object map + material logging
   // -----------------------
   useEffect(() => {
     allObjects.current = {};
-    const roots = [baseScene, doorsScene, glassDoorsScene, drawersScene].filter(Boolean);
-    if (roots.length === 0 && scene) roots.push(scene);
+    // Use all scenes: main scene + asset scenes
+    const roots = [mainScene, doorsScene, drawersScene, glassDoorsScene, otherScene].filter(Boolean);
     if (roots.length === 0) return;
 
     const materials = new Set();
@@ -461,19 +479,28 @@ export function Experience({
       });
     });
 
-    // existing initialization: set all asset scenes visible by default
-    if (baseScene) baseScene.traverse((o) => (o.visible = true));
+    // existing initialization: set all scenes visible by default
+    if (mainScene) {
+      mainScene.visible = true;
+      mainScene.traverse((o) => (o.visible = true));
+    }
+
+    // Set all asset scenes visible by default
     if (doorsScene) {
       doorsScene.visible = true;
       doorsScene.traverse((o) => (o.visible = true));
+    }
+    if (drawersScene) {
+      drawersScene.visible = true;
+      drawersScene.traverse((o) => (o.visible = true));
     }
     if (glassDoorsScene) {
       glassDoorsScene.visible = true;
       glassDoorsScene.traverse((o) => (o.visible = true));
     }
-    if (drawersScene) {
-      drawersScene.visible = true;
-      drawersScene.traverse((o) => (o.visible = true));
+    if (otherScene) {
+      otherScene.visible = true;
+      otherScene.traverse((o) => (o.visible = true));
     }
 
     // Debug: Log all object names in the scene
@@ -481,9 +508,9 @@ export function Experience({
     console.log('📦 All objects found:', Object.keys(allObjects.current));
     
     // Debug: Check interaction groups vs actual objects
-    if (Array.isArray(config.interactionGroups)) {
+    if (Array.isArray(interactionGroups)) {
       console.log('⚙️ Interaction Groups:');
-      config.interactionGroups.forEach((group, i) => {
+      interactionGroups.forEach((group, i) => {
         console.log(`  Group ${i}: ${group.type} - ${group.label}`);
         if (Array.isArray(group.parts)) {
           group.parts.forEach(part => {
@@ -503,8 +530,8 @@ export function Experience({
     }
 
     // init interactionGroups initialState
-    if (Array.isArray(config.interactionGroups)) {
-      config.interactionGroups.forEach((group) => {
+    if (Array.isArray(interactionGroups)) {
+      interactionGroups.forEach((group) => {
         if (!Array.isArray(group.parts)) return;
         group.parts.forEach((part) => {
           const obj = allObjects.current[part.name];
@@ -532,10 +559,11 @@ export function Experience({
       });
     }
 
-    // camera
-    if (config.camera) {
-      console.log('🎥 Setting camera from config:', config.camera);
-      const { position, target, fov } = config.camera;
+    // camera (support camera in either config.camera or config.metadata.camera)
+    const cameraCfg = config.camera || config.metadata?.camera;
+    if (cameraCfg) {
+      console.log('🎥 Setting camera from config:', cameraCfg);
+      const { position, target, fov } = cameraCfg;
       
       if (position) {
         console.log('📍 Setting camera position to:', position);
@@ -565,10 +593,10 @@ export function Experience({
     // Log model load
     logInteraction("MODEL_LOADED", {
       modelName: config.name || modelName,
-      hasLights: config.lights && config.lights.length > 0,
-      interactiveParts: config.interactionGroups?.reduce((count, group) => count + (group.parts?.length || 0), 0) || 0
+      hasLights: (config.lights && config.lights.length > 0) || (config.metadata?.lights && config.metadata.lights.length > 0),
+      interactiveParts: interactionGroups?.reduce((count, group) => count + (group.parts?.length || 0), 0) || 0
     });
-  }, [baseScene, doorsScene, glassDoorsScene, drawersScene, scene, modelName, config, camera, logInteraction]);
+  }, [mainScene, modelName, config, camera, interactionGroups, logInteraction]);
 
   // init lights when objects ready
   useEffect(() => {
@@ -830,7 +858,7 @@ export function Experience({
       getInteractionType,
       toggleLight,
       toggleAllLights,
-      hasLights: !!(config.lights && config.lights.length > 0),
+  hasLights: !!((config.lights && config.lights.length > 0) || (config.metadata?.lights && config.metadata.lights.length > 0)),
       lights: lights.reduce((acc, l) => ((acc[l.name] = l.isOn), acc), {}),
       logInteraction, // Expose logging function to other components
       
@@ -1322,16 +1350,43 @@ export function Experience({
       <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
 
       <group ref={modelGroupRef} onPointerDown={handlePointerDown}>
-        {baseScene && <primitive object={baseScene} />}
-        {doorsScene && <primitive object={doorsScene} />}
-        {glassDoorsScene && <primitive object={glassDoorsScene} />}
-        {drawersScene && <primitive object={drawersScene} />}
-        {!config.assets && scene && <primitive object={scene} />}
+        {/* Render main model scene */}
+        {mainScene && (
+          <>
+            {console.log('Rendering main scene')}
+            <primitive object={mainScene} />
+          </>
+        )}
+        {/* Render all additional asset scenes */}
+        {doorsScene && (
+          <>
+            {console.log('Rendering doors asset')}
+            <primitive key="doors" object={doorsScene} />
+          </>
+        )}
+        {drawersScene && (
+          <>
+            {console.log('Rendering drawers asset')}
+            <primitive key="drawers" object={drawersScene} />
+          </>
+        )}
+        {glassDoorsScene && (
+          <>
+            {console.log('Rendering glass doors asset')}
+            <primitive key="glassDoors" object={glassDoorsScene} />
+          </>
+        )}
+        {otherScene && (
+          <>
+            {console.log('Rendering other asset')}
+            <primitive key="other" object={otherScene} />
+          </>
+        )}
       </group>
 
       <OrbitControls 
         ref={orbitControlsRef}
-        target={config.camera?.target || [0, 0, 0]}
+        target={config.camera?.target || config.metadata?.camera?.target || [0, 0, 0]}
         enabled={userPermissions?.canRotate || false}
         enablePan={userPermissions?.canPan || false}
         enableZoom={userPermissions?.canZoom || false}
