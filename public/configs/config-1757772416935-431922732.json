@@ -7,31 +7,18 @@
       "type": "doors",
       "label": "Doors",
       "parts": [
+       
         {
-          "name": "Door1",
-          "rotationAxis": "y",
-          "openAngle": 90,
-          "closedPosition": 0,
-          "openPosition": 1.57
-        },
-        {
-          "name": "Door2", 
-          "rotationAxis": "y",
-          "openAngle": 90,
-          "closedPosition": 0,
-          "openPosition": 1.57
-        },
-        {
-          "name": "Door3",
+          "name": "Door2",
           "rotationAxis": "y", 
-          "openAngle": 90,
+          "openAngle": -90,
           "closedPosition": 0,
           "openPosition": -1.57
         },
         {
-          "name": "Door4",
+          "name": "Door3",
           "rotationAxis": "y",
-          "openAngle": 90,
+          "openAngle": -90,
           "closedPosition": 0,
           "openPosition": -1.57
         }
@@ -58,7 +45,7 @@
   ],
 
   "camera": {
-    "position": [0, 3, 8],
+    "position": [0, 5, 8],
     "target": [0, 1.5, 0],
     "fov": 45
   },

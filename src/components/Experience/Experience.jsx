@@ -3,7 +3,7 @@ import * as THREE from "three";
 import React, { Suspense, useRef, useEffect, useState, useCallback } from "react";
 import { useThree } from "@react-three/fiber";
 import { Environment, OrbitControls, useGLTF, Html } from "@react-three/drei";
-import { modelsConfig } from "../../modelsConfig"; // fallback
+// import { modelsConfig } from "../../modelsConfig"; // Removed - using dynamic configs only
 import { useInteractions } from "./hooks/useInteractions";
 import { logActivity } from "../../api/user";
 import { 
@@ -26,8 +26,8 @@ export function Experience({
   onModelError,
   onModelTransformChange
 }) {
-  // Prefer provided modelConfig/allModels (supports dynamic custom models) and fallback to static modelsConfig
-  const config = modelConfig || (allModels && allModels[modelName]) || modelsConfig[modelName];
+  // Use provided modelConfig or fallback to allModels
+  const config = modelConfig || (allModels && allModels[modelName]);
   
   // Guard against undefined config
   if (!config) {
@@ -57,21 +57,55 @@ export function Experience({
 
   // Load the main model (base model)
   console.log('Loading main model from:', config.path);
+  console.log('Full config object:', JSON.stringify(config, null, 2));
   const { scene: mainScene } = useGLTF(config.path);
   console.log('Main scene loaded:', mainScene ? 'success' : 'failed');
 
-  // Load additional assets dynamically (only if they exist in config.assets)
-  const doorsScene = config.assets?.doors ? useGLTF(config.assets.doors).scene : null;
-  const drawersScene = config.assets?.drawers ? useGLTF(config.assets.drawers).scene : null;
-  const glassDoorsScene = config.assets?.glassDoors ? useGLTF(config.assets.glassDoors).scene : null;
-  const otherScene = config.assets?.other ? useGLTF(config.assets.other).scene : null;
+  // Load ALL additional assets dynamically from config.assets (no manual config needed)
+  const assetScenes = {};
+  if (config.assets && typeof config.assets === 'object') {
+    console.log('[ASSETS] Loading assets from config:', Object.keys(config.assets));
+    Object.entries(config.assets).forEach(([assetKey, assetPath]) => {
+      if (assetPath && typeof assetPath === 'string') {
+        try {
+          const { scene } = useGLTF(assetPath);
+          assetScenes[assetKey] = scene;
+          console.log(`[ASSET] ${assetKey} loaded from: ${assetPath}`);
+          let meshCount = 0;
+          scene.traverse(obj => { if (obj.isMesh) meshCount++; });
+          console.log(`[ASSET] ${assetKey} mesh count: ${meshCount}`);
+        } catch (error) {
+          console.error(`[ASSET] Failed to load ${assetKey} from ${assetPath}:`, error);
+        }
+      }
+    });
+  } else {
+    console.log('[ASSETS] No assets found in config');
+  }
 
-  // Combine main scene with asset scenes for placement calculations
-  const allScenes = { base: mainScene };
-  if (doorsScene) allScenes.doors = doorsScene;
-  if (drawersScene) allScenes.drawers = drawersScene;
-  if (glassDoorsScene) allScenes.glassDoors = glassDoorsScene;
-  if (otherScene) allScenes.other = otherScene;
+  // Combine main scene with ALL asset scenes for placement calculations
+  const allScenes = { base: mainScene, ...assetScenes };
+
+  // Add all asset scenes to the main group for rendering
+  useEffect(() => {
+    if (!modelGroupRef.current) return;
+    // Remove previous children
+    while (modelGroupRef.current.children.length > 0) {
+      modelGroupRef.current.remove(modelGroupRef.current.children[0]);
+    }
+    // Add main scene
+    if (mainScene) {
+      modelGroupRef.current.add(mainScene);
+      console.log('[SCENE] Main scene added to group');
+    }
+    // Add ALL asset scenes dynamically
+    Object.entries(assetScenes).forEach(([assetKey, scene]) => {
+      if (scene) {
+        modelGroupRef.current.add(scene);
+        console.log(`[SCENE] Asset scene '${assetKey}' added to group`);
+      }
+    });
+  }, [mainScene, ...Object.values(assetScenes)]);
 
   // Placement handling (admin transform preferred; else autofit/focused)
   useEffect(() => {
@@ -124,12 +158,9 @@ export function Experience({
     config?.modelPosition,
     config?.modelRotation,
     config?.modelScale,
-    // Use individual asset scenes
+    // Use all asset scenes dynamically
     mainScene,
-    doorsScene,
-    drawersScene,
-    glassDoorsScene,
-    otherScene,
+    ...Object.values(assetScenes),
     camera
   ]);
 
@@ -328,15 +359,24 @@ export function Experience({
 
   // Apply visibility based on dynamic asset scenes
   if (mainScene) mainScene.traverse((o) => o.isObject3D && (o.visible = true));
-  if (doorsScene) {
-    doorsScene.traverse((o) => o.isObject3D && (o.visible = false));
-    doorsScene.visible = true;
-  }
-  if (glassDoorsScene) {
-    glassDoorsScene.traverse((o) => o.isObject3D && (o.visible = false));
-    glassDoorsScene.visible = true;
-  }
-  if (drawersScene) drawersScene.traverse((o) => o.isObject3D && (o.visible = true));
+  
+  // Apply visibility to all asset scenes dynamically
+  Object.entries(assetScenes).forEach(([assetKey, scene]) => {
+    if (scene) {
+      if (assetKey === 'doors') {
+        scene.traverse((o) => o.isObject3D && (o.visible = false));
+        scene.visible = true;
+      } else if (assetKey === 'glassDoors') {
+        scene.traverse((o) => o.isObject3D && (o.visible = false));
+        scene.visible = true;
+      } else if (assetKey === 'drawers') {
+        scene.traverse((o) => o.isObject3D && (o.visible = true));
+      } else {
+        // For other assets, make them visible by default
+        scene.traverse((o) => o.isObject3D && (o.visible = true));
+      }
+    }
+  });
 
   visibleDoors.forEach((doorName) => {
     let targetName = doorName;
@@ -457,8 +497,8 @@ export function Experience({
   // -----------------------
   useEffect(() => {
     allObjects.current = {};
-    // Use all scenes: main scene + asset scenes
-    const roots = [mainScene, doorsScene, drawersScene, glassDoorsScene, otherScene].filter(Boolean);
+    // Use all scenes: main scene + ALL asset scenes dynamically
+    const roots = [mainScene, ...Object.values(assetScenes)].filter(Boolean);
     if (roots.length === 0) return;
 
     const materials = new Set();
@@ -485,23 +525,14 @@ export function Experience({
       mainScene.traverse((o) => (o.visible = true));
     }
 
-    // Set all asset scenes visible by default
-    if (doorsScene) {
-      doorsScene.visible = true;
-      doorsScene.traverse((o) => (o.visible = true));
-    }
-    if (drawersScene) {
-      drawersScene.visible = true;
-      drawersScene.traverse((o) => (o.visible = true));
-    }
-    if (glassDoorsScene) {
-      glassDoorsScene.visible = true;
-      glassDoorsScene.traverse((o) => (o.visible = true));
-    }
-    if (otherScene) {
-      otherScene.visible = true;
-      otherScene.traverse((o) => (o.visible = true));
-    }
+    // Set ALL asset scenes visible by default
+    Object.entries(assetScenes).forEach(([assetKey, scene]) => {
+      if (scene) {
+        scene.visible = true;
+        scene.traverse((o) => (o.visible = true));
+        console.log(`[VISIBILITY] Asset scene '${assetKey}' set to visible`);
+      }
+    });
 
     // Debug: Log all object names in the scene
     console.log(`🔍 MODEL DEBUG for "${modelName}":`);
@@ -596,7 +627,7 @@ export function Experience({
       hasLights: (config.lights && config.lights.length > 0) || (config.metadata?.lights && config.metadata.lights.length > 0),
       interactiveParts: interactionGroups?.reduce((count, group) => count + (group.parts?.length || 0), 0) || 0
     });
-  }, [mainScene, modelName, config, camera, interactionGroups, logInteraction]);
+  }, [mainScene, ...Object.values(assetScenes), modelName, config, camera, interactionGroups, logInteraction]);
 
   // init lights when objects ready
   useEffect(() => {
@@ -1357,31 +1388,15 @@ export function Experience({
             <primitive object={mainScene} />
           </>
         )}
-        {/* Render all additional asset scenes */}
-        {doorsScene && (
-          <>
-            {console.log('Rendering doors asset')}
-            <primitive key="doors" object={doorsScene} />
-          </>
-        )}
-        {drawersScene && (
-          <>
-            {console.log('Rendering drawers asset')}
-            <primitive key="drawers" object={drawersScene} />
-          </>
-        )}
-        {glassDoorsScene && (
-          <>
-            {console.log('Rendering glass doors asset')}
-            <primitive key="glassDoors" object={glassDoorsScene} />
-          </>
-        )}
-        {otherScene && (
-          <>
-            {console.log('Rendering other asset')}
-            <primitive key="other" object={otherScene} />
-          </>
-        )}
+        {/* Render ALL additional asset scenes dynamically */}
+        {Object.entries(assetScenes).map(([assetKey, scene]) => (
+          scene && (
+            <React.Fragment key={assetKey}>
+              {console.log(`Rendering ${assetKey} asset`)}
+              <primitive object={scene} />
+            </React.Fragment>
+          )
+        ))}
       </group>
 
       <OrbitControls 

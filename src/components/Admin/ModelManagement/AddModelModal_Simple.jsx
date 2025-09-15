@@ -123,21 +123,11 @@ export default function AddModelModalSimple({ onClose, onAdd, editModel = null, 
     }
     
     const endpoint = subPath === 'configs' ? '/api/upload-config' : '/api/upload';
-    let res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: token ? { 'Authorization': `Bearer ${token}` } : undefined,
       body: formData
     });
-    // Fallback: if configs endpoint not found (older backend), try alternate admin path
-    if (subPath === 'configs' && res.status === 404) {
-      const alt = '/api/admin/configs/upload';
-      console.warn('[ConfigUpload] Primary endpoint 404, retrying alt:', alt);
-      res = await fetch(`${API_BASE_URL}${alt}`, {
-        method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : undefined,
-        body: formData
-      });
-    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       console.error('[UploadError]', res.status, err);

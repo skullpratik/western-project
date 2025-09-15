@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGLTF } from '@react-three/drei';
 import AddModelModalSimple from './AddModelModal_Simple.jsx';
-import { modelsConfig } from '../../../modelsConfig';
+import AddModelModalMultiAsset from './AddModelModal_MultiAsset.jsx';
+// import { modelsConfig } from '../../../modelsConfig'; // Removed - using dynamic configs only
 import './ModelManagement.css';
 
 const API_BASE_URL = 'http://localhost:5000';
@@ -94,6 +95,7 @@ const ModelManagement = () => {
   const [dbModels, setDbModels] = useState([]);
   const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
+  const [showAddMultiAsset, setShowAddMultiAsset] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editModel, setEditModel] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -160,7 +162,7 @@ const ModelManagement = () => {
     return formatted;
   }, [dbModels]);
 
-  const allModels = { ...modelsConfig, ...dbModelsFormatted };
+  const allModels = { ...dbModelsFormatted }; // Only use database models
   const modelEntries = Object.entries(allModels);
 
   const handleAddModel = async (modelData) => {
@@ -207,36 +209,6 @@ const ModelManagement = () => {
     if (originalModel) {
       setEditModel(originalModel);
       setShowEdit(true);
-    }
-  };
-
-  const handleUpdateModel = async (modelData) => {
-    try {
-      setLoading(true);
-      
-      // Refresh the models list after successful update
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/admin/models`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const models = await response.json();
-        setDbModels(models);
-        
-        // Fire event so MainApp can refresh
-        window.dispatchEvent(new Event('modelsUpdated'));
-      }
-      
-      setShowEdit(false);
-      setEditModel(null);
-    } catch (err) {
-      console.error('Error refreshing models after update:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -329,7 +301,8 @@ const ModelManagement = () => {
         <p>Overview of all 3D models configured in the application.</p>
       </div>
       <div className="toolbar-row" style={{display:'flex', gap:8}}>
-        <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model</button>
+        <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model (Simple)</button>
+        <button className="btn-secondary" onClick={()=>setShowAddMultiAsset(true)}>Add Model (Multi-Asset)</button>
   {/* Generator access removed */}
       </div>
       <div className="models-grid">
@@ -344,13 +317,14 @@ const ModelManagement = () => {
           />
         ))}
       </div>
-  {showAdd && <AddModelModalSimple onClose={()=>setShowAdd(false)} onAdd={handleAddModel} />}
+      {showAdd && <AddModelModalSimple onClose={()=>setShowAdd(false)} onAdd={handleAddModel} />}
+      {showAddMultiAsset && <AddModelModalMultiAsset onClose={()=>setShowAddMultiAsset(false)} onAdd={handleAddModel} />}
       {showEdit && editModel && (
-        <AddModelModalSimple 
+        <AddModelModalSimple
           onClose={() => {
             setShowEdit(false);
             setEditModel(null);
-          }} 
+          }}
           onAdd={handleUpdateModel}
           editModel={editModel}
           isEditMode={true}

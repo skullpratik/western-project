@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { Experience } from "../../Experience/Experience.jsx";
 import { Interface } from "../../Interface/Interface.jsx";
-import { modelsConfig } from "../../../modelsConfig";
+// import { modelsConfig } from "../../../modelsConfig"; // Removed - using dynamic configs only
 import { useAuth } from "../../../context/AuthContext";
 import { ActivityLog } from "../../ActivityLog/ActivityLog";
 import './UserPreview.css';
@@ -81,7 +81,9 @@ function UserPreview() {
         placementMode: model.placementMode || 'autofit',
         modelPosition: Array.isArray(model.modelPosition) ? model.modelPosition : undefined,
         modelRotation: Array.isArray(model.modelRotation) ? model.modelRotation : undefined,
-        modelScale: typeof model.modelScale === 'number' ? model.modelScale : undefined
+        modelScale: typeof model.modelScale === 'number' ? model.modelScale : undefined,
+        // Include assets from database if they exist
+        ...(model.assets && { assets: model.assets }),
       };
       console.log('Formatted model (UserPreview):', formatted[model.name]);
     });
@@ -99,10 +101,10 @@ function UserPreview() {
     window.addEventListener('customModelsUpdated', handler);
     return () => window.removeEventListener('customModelsUpdated', handler);
   }, []);
-  const mergedModels = useMemo(() => ({ ...modelsConfig, ...dbModelsFormatted }), [dbModelsFormatted]);
+  const mergedModels = useMemo(() => ({ ...dbModelsFormatted }), [dbModelsFormatted]);
   const [selectedModel, setSelectedModel] = useState(() => {
     const saved = localStorage.getItem('selectedModel');
-    return saved && (modelsConfig[saved] || customModels[saved]) ? saved : 'Undercounter';
+    return saved && (dbModelsFormatted[saved] || customModels[saved]) ? saved : 'Undercounter';
   });
   const [api, setApi] = useState(null);
   const [showActivityLog, setShowActivityLog] = useState(false);

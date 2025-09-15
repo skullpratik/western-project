@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { Canvas } from "@react-three/fiber";
 import { Experience } from "../Experience/Experience.jsx";
 import { Interface } from "../Interface/Interface.jsx";
-import { modelsConfig } from "../../modelsConfig";
+// import { modelsConfig } from "../../modelsConfig"; // Removed - using dynamic configs only
 import { useAuth } from "../../context/AuthContext";
 import { ActivityLog } from "../ActivityLog/ActivityLog";
 import './MainApp.css';
@@ -121,6 +121,8 @@ function MainApp() {
         path: normalizedPath,
         displayName: model.displayName,
         type: model.type,
+        // Include assets from database if they exist
+        ...(model.assets && { assets: model.assets }),
       };
       formatted[model.name] = { ...baseModelFields, __configUrl: configUrl };
     });
@@ -160,13 +162,12 @@ function MainApp() {
   }, [dbModelsFormatted, unwrapExternalConfig, normalizeModelUrls]);
 
   const mergedModels = useMemo(() => {
-    // Merge static developer config (fallback), db basic, and external JSON if present
-    const merged = { ...modelsConfig };
+    // Merge database models with external JSON configs
+    const merged = {};
     Object.entries(dbModelsFormatted).forEach(([name, base]) => {
       const ext = externalConfigs[name];
       if (ext) {
-        // Prefer external config, but if it doesn't include a model path or assets.base,
-        // auto-fill the path from the admin-uploaded file for convenience.
+        // Use external config, but auto-fill path from database if missing
         const combined = { ...ext };
         const hasAssetsBase = !!(combined.assets && combined.assets.base);
         if (!hasAssetsBase && !combined.path && base.path) {
@@ -175,8 +176,8 @@ function MainApp() {
         merged[name] = combined;
         console.log('[MergedModel] Using external config for', name, combined);
       } else {
-        // No external config: fall back to static if exists, else use base path only
-        merged[name] = modelsConfig[name] ? normalizeModelUrls({ ...modelsConfig[name] }) : normalizeModelUrls({ path: base.path });
+        // No external config: use base database model data only
+        merged[name] = normalizeModelUrls({ ...base });
         console.log('[MergedModel] No external config for', name, merged[name]);
       }
     });
@@ -185,8 +186,8 @@ function MainApp() {
 
   const [selectedModel, setSelectedModel] = useState(() => {
     const saved = localStorage.getItem('selectedModel');
-    // Start with saved if it exists in static config; we'll revalidate against DB after load
-    return saved && modelsConfig[saved] ? saved : "Undercounter";
+    // Start with saved model if valid; we'll revalidate after DB load
+    return saved || "Undercounter";
   });
 
   // After DB models load, ensure we have a valid selection; prefer a DB model (often the one just created)

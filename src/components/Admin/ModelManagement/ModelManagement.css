@@ -1,12 +1,47 @@
-.wizard { max-width: 960px; margin: 0 auto; }
-.wizard-header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
-.wizard-title { margin: 0; }
-.form-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
-.grid-2 { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
-.wizard-actions { display:flex; justify-content: space-between; margin-top: 16px; }
-.widgets-editor .simple-list li { display:flex; gap:8px; align-items:center; }
-.assets-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
-.asset-group { display:flex; flex-direction:column; gap:6px; padding:8px; border:1px solid #e2e8f0; border-radius:8px; }
+.btn-primary-small {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary-small:hover {
+  background: #1d4ed8;
+}
+
+.btn-secondary-small {
+  background: #e2e8f0;
+  color: #111827;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary-small:hover {
+  background: #cbd5e1;
+}
+
+.btn-danger-small {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-danger-small:hover {
+  background: #b91c1c;
+}
 .model-management {
   padding: 20px;
   background: #fff;
