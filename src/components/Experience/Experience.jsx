@@ -55,6 +55,16 @@ export function Experience({
   // Allow interactionGroups to be provided under metadata as well
   const interactionGroups = config.interactionGroups || config.metadata?.interactionGroups || [];
 
+  // Hook that provides door/drawer animation helpers (GSAP-based)
+  const {
+    togglePart: interactionsTogglePart,
+    toggleDoor,
+    toggleDrawer,
+    isInteractiveObject: interactionsIsInteractiveObject,
+    findInteractiveObjectName,
+    getInteractionType: interactionsGetInteractionType
+  } = useInteractions(allObjects, config);
+
   // Load the main model (base model)
   console.log('Loading main model from:', config.path);
   console.log('Full config object:', JSON.stringify(config, null, 2));
@@ -341,74 +351,12 @@ export function Experience({
     return best;
   }, []);
 
-  const togglePart = useCallback(async (partName, visibility = "toggle") => {
-    console.log(`🎬 Toggling part: ${partName}, visibility: ${visibility}`);
+  // Use the toggle from the interactions hook which performs animated transitions
+  const togglePart = interactionsTogglePart;
 
-    const obj = getObjectByLogicalName(partName);
-    if (!obj) {
-      console.warn(`togglePart: object "${partName}" not found`);
-      return;
-    }
+  const isInteractiveObject = interactionsIsInteractiveObject;
 
-    let newVisibility;
-    if (visibility === "toggle") {
-      newVisibility = !obj.visible;
-    } else if (visibility === "auto") {
-      // For doors/drawers, toggle based on current state
-      newVisibility = !obj.visible;
-    } else {
-      newVisibility = visibility === "show" || visibility === true;
-    }
-
-    setObjectVisibleRecursive(obj, newVisibility);
-
-    // Update click surface visibility if it exists
-    const clickSurface = clickHelpers.current.get(partName);
-    if (clickSurface) {
-      clickSurface.visible = newVisibility;
-    }
-
-    // Log the interaction
-    logInteraction("PART_TOGGLED", {
-      partName,
-      newVisibility,
-      interactionType: "click"
-    });
-
-    console.log(`✅ Toggled ${partName} to ${newVisibility ? 'visible' : 'hidden'}`);
-  }, [getObjectByLogicalName, setObjectVisibleRecursive, logInteraction]);
-
-  const isInteractiveObject = useCallback((objectName) => {
-    if (!objectName || !interactionGroups) return false;
-
-    // Check if the object name exists in any interaction group
-    for (const group of interactionGroups) {
-      if (Array.isArray(group.parts)) {
-        const found = group.parts.some(part => part.name === objectName);
-        if (found) return true;
-      }
-    }
-    return false;
-  }, [interactionGroups]);
-
-  const getInteractionType = useCallback((objectName) => {
-    if (!objectName || !interactionGroups) return null;
-
-    // Find which interaction group this object belongs to
-    for (const group of interactionGroups) {
-      if (Array.isArray(group.parts)) {
-        const part = group.parts.find(part => part.name === objectName);
-        if (part) {
-          return {
-            type: group.type,
-            group: group.label || group.type,
-            part: part
-          };
-        }
-      }
-    }
-    return null;
-  }, [interactionGroups]);
+  const getInteractionType = interactionsGetInteractionType;
 
   const applyDoorSelection = useCallback(async (doorCount, position, doorType = "solid") => {
     if (!config?.presets?.doorSelections) return;
@@ -1499,9 +1447,33 @@ export function Experience({
     console.log('🔍 Dynamic interaction search result:', interactiveObjectName);
 
     if (interactiveObjectName) {
+      // Diagnostic: log interaction type
+      try {
+        const itype = getInteractionType ? getInteractionType(interactiveObjectName) : null;
+        console.log('🔎 Interaction type detected for', interactiveObjectName, ':', itype);
+      } catch (err) {
+        console.warn('⚠️ getInteractionType failed:', err);
+      }
       console.log(`✅ Found interactive object: ${interactiveObjectName}`);
       console.log(`🎬 Calling togglePart for: ${interactiveObjectName}`);
-      togglePart(interactiveObjectName, "auto");
+      // Call the generic togglePart (from hook) if available - this should animate via GSAP
+      if (typeof togglePart === 'function') {
+        try {
+          togglePart(interactiveObjectName, "auto");
+        } catch (err) {
+          console.error('❌ togglePart threw error:', err);
+        }
+      } else {
+        // Fallback: call specific toggles directly
+        const t = getInteractionType ? getInteractionType(interactiveObjectName) : null;
+        if (t === 'door' && typeof toggleDoor === 'function') {
+          toggleDoor(interactiveObjectName);
+        } else if (t === 'drawer' && typeof toggleDrawer === 'function') {
+          toggleDrawer(interactiveObjectName);
+        } else {
+          console.warn('⚠️ No toggle function available for', interactiveObjectName);
+        }
+      }
       e.stopPropagation();
     } else {
       console.log('❌ No interactive object found in hierarchy');
