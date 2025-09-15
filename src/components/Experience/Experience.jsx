@@ -341,6 +341,75 @@ export function Experience({
     return best;
   }, []);
 
+  const togglePart = useCallback(async (partName, visibility = "toggle") => {
+    console.log(`🎬 Toggling part: ${partName}, visibility: ${visibility}`);
+
+    const obj = getObjectByLogicalName(partName);
+    if (!obj) {
+      console.warn(`togglePart: object "${partName}" not found`);
+      return;
+    }
+
+    let newVisibility;
+    if (visibility === "toggle") {
+      newVisibility = !obj.visible;
+    } else if (visibility === "auto") {
+      // For doors/drawers, toggle based on current state
+      newVisibility = !obj.visible;
+    } else {
+      newVisibility = visibility === "show" || visibility === true;
+    }
+
+    setObjectVisibleRecursive(obj, newVisibility);
+
+    // Update click surface visibility if it exists
+    const clickSurface = clickHelpers.current.get(partName);
+    if (clickSurface) {
+      clickSurface.visible = newVisibility;
+    }
+
+    // Log the interaction
+    logInteraction("PART_TOGGLED", {
+      partName,
+      newVisibility,
+      interactionType: "click"
+    });
+
+    console.log(`✅ Toggled ${partName} to ${newVisibility ? 'visible' : 'hidden'}`);
+  }, [getObjectByLogicalName, setObjectVisibleRecursive, logInteraction]);
+
+  const isInteractiveObject = useCallback((objectName) => {
+    if (!objectName || !interactionGroups) return false;
+
+    // Check if the object name exists in any interaction group
+    for (const group of interactionGroups) {
+      if (Array.isArray(group.parts)) {
+        const found = group.parts.some(part => part.name === objectName);
+        if (found) return true;
+      }
+    }
+    return false;
+  }, [interactionGroups]);
+
+  const getInteractionType = useCallback((objectName) => {
+    if (!objectName || !interactionGroups) return null;
+
+    // Find which interaction group this object belongs to
+    for (const group of interactionGroups) {
+      if (Array.isArray(group.parts)) {
+        const part = group.parts.find(part => part.name === objectName);
+        if (part) {
+          return {
+            type: group.type,
+            group: group.label || group.type,
+            part: part
+          };
+        }
+      }
+    }
+    return null;
+  }, [interactionGroups]);
+
   const applyDoorSelection = useCallback(async (doorCount, position, doorType = "solid") => {
     if (!config?.presets?.doorSelections) return;
     const selection = config.presets.doorSelections?.[doorCount]?.[position];
@@ -427,11 +496,82 @@ export function Experience({
     });
   }, [config, logInteraction]);
 
-  const { togglePart, isInteractiveObject, getInteractionType, findInteractiveObjectName } = useInteractions(
-    allObjects, 
-    config, 
-    logInteraction
-  );
+  // Reset function for Undercounter model
+  const resetToInitialState = useCallback(async () => {
+    if (!config) return;
+
+    console.log('🔄 Resetting to initial state...');
+
+    // Reset all scenes to initial visibility
+    if (mainScene) mainScene.traverse((o) => o.isObject3D && (o.visible = true));
+    Object.entries(assetScenes).forEach(([assetKey, scene]) => {
+      if (scene) {
+        scene.traverse((o) => o.isObject3D && (o.visible = true));
+      }
+    });
+
+    // Apply hiddenInitially
+    if (Array.isArray(config.hiddenInitially)) {
+      config.hiddenInitially.forEach((name) => {
+        const obj = getObjectByLogicalName(name);
+        if (obj) setObjectVisibleRecursive(obj, false);
+      });
+    }
+
+    // Reset interaction groups to initial state
+    if (Array.isArray(interactionGroups)) {
+      interactionGroups.forEach((group) => {
+        if (!Array.isArray(group.parts)) return;
+        group.parts.forEach((part) => {
+          const obj = allObjects.current[part.name];
+          if (!obj) return;
+
+          // Reset visibility
+          if (part.initialState?.visible !== undefined) {
+            obj.visible = part.initialState.visible;
+          }
+
+          // Reset position
+          if (part.initialState?.position) {
+            const p = part.initialState.position;
+            if (p.x !== undefined) obj.position.x = p.x;
+            if (p.y !== undefined) obj.position.y = p.y;
+            if (p.z !== undefined) obj.position.z = p.z;
+          }
+
+          // Reset rotation
+          if (part.initialState?.rotation) {
+            const r = part.initialState.rotation;
+            if (r.x !== undefined) obj.rotation.x = r.x;
+            if (r.y !== undefined) obj.rotation.y = r.y;
+            if (r.z !== undefined) obj.rotation.z = r.z;
+          }
+
+          // Reset scale
+          if (part.initialState?.scale) {
+            const s = part.initialState.scale;
+            if (s.x !== undefined) obj.scale.x = s.x;
+            if (s.y !== undefined) obj.scale.y = s.y;
+            if (s.z !== undefined) obj.scale.z = s.z;
+          }
+        });
+      });
+    }
+
+    // Reset door selections state
+    setDoorSelections({ count: 0, selection: 0 });
+
+    // Reset applied textures
+    setAppliedTextures({});
+
+    // Log reset action
+    await logInteraction("MODEL_RESET", {
+      widgetType: "reset",
+      modelName: config.name || modelName
+    });
+
+    console.log('✅ Model reset to initial state');
+  }, [config, logInteraction]);
 
   useEffect(() => {
     if (onTogglePart) {
@@ -645,7 +785,7 @@ export function Experience({
         loader.load(
           src,
           (tex) => {
-            tex.encoding = THREE.sRGBEncoding;
+            tex.colorSpace = THREE.SRGBColorSpace;
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
             resolve(tex);
           },
@@ -882,6 +1022,7 @@ export function Experience({
     // Expose API (include lights toggles & helper functions)
     const api = {
       applyDoorSelection,
+      resetToInitialState,
       togglePart,
       getAllNodeNames: () => Object.keys(allObjects.current || {}),
       applyTexture,
@@ -1329,6 +1470,7 @@ export function Experience({
     onApiReady,
     togglePart,
     applyDoorSelection,
+    resetToInitialState,
     applyRequest,
     isInteractiveObject,
     getInteractionType,

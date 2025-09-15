@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 const API_BASE_URL = 'http://localhost:5000';
 
-export default function AddModelModalSimple({ onClose, onAdd, editModel = null, isEditMode = false }) {
+export default function AddModelModalSimple({ onClose, onAdd, editModel = null, isEditMode = false, onOpenMultiAsset = null }) {
   const [name, setName] = useState(editModel?.name || '');
   const [modelPath, setModelPath] = useState(editModel?.file || editModel?.path || '');
   const [configUrl, setConfigUrl] = useState(editModel?.configUrl || '');
@@ -396,7 +396,7 @@ export default function AddModelModalSimple({ onClose, onAdd, editModel = null, 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontWeight: 600 }}>Additional assets (optional)</span>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" onClick={handleAssetsPick} disabled={uploadingAssets || !isLoggedIn || checkingAuth} className="btn-secondary">
+              <button type="button" onClick={() => { if (onOpenMultiAsset) onOpenMultiAsset(); else handleAssetsPick(); }} disabled={uploadingAssets || !isLoggedIn || checkingAuth} className="btn-secondary">
                 {uploadingAssets ? 'Uploading…' : !isLoggedIn && !checkingAuth ? 'Login Required' : 'Upload multiple'}
               </button>
               {assets.length > 0 && (

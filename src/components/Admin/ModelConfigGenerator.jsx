@@ -52,8 +52,10 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
   const [uiWidgets, setUiWidgets] = useState([]); // each: { type, title, meshName? }
   const [lights, setLights] = useState([]); // each: { name, meshName, defaultState:on|off, intensity:number }
 
-  // Helpers
-  const parseList = (value) => value.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+  // Load configuration from uploaded file (no longer hardcoded)
+  const loadConfigFromFile = () => {
+    setFeedback({ type: 'info', msg: 'Please upload a JSON configuration file using the "Upload JSON File" option in the Import section.' });
+  };
 
   const ensureDoorConfig = (door) => {
     setDoorConfig((cfg) => ({
@@ -294,6 +296,85 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
     }
   };
 
+  const handleJsonUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+      alert('Please select a valid JSON file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        // Apply the same logic as importJson
+        setName(data.name || '');
+        setAssets(data.assets || emptyAssets);
+        setCamera(data.camera || { position: [0, 2, 5], target: [0, 1, 0], fov: 50 });
+        setHiddenInitially(data.hiddenInitially || data.metadata?.hiddenInitially || []);
+
+        // derive doors & doorConfig from interactionGroups if present
+        const ig = data.interactionGroups || [];
+        const doorGroup = ig.find((g) => g.type === 'doors');
+        if (doorGroup?.parts?.length) {
+          const doors = doorGroup.parts.map((p) => p.name);
+          const solids = doors.filter((d) => !(data.doorTypeMap?.toSolid && data.doorTypeMap.toSolid[d]));
+          const glasses = doors.filter((d) => data.doorTypeMap?.toSolid && data.doorTypeMap.toSolid[d]);
+          setSolidDoors(solids);
+          setGlassDoors(glasses);
+          const cfg = {};
+          doorGroup.parts.forEach((p) => {
+            cfg[p.name] = { axis: p.rotationAxis || 'y', angle: p.openAngle ?? 90 };
+          });
+          setDoorConfig(cfg);
+        } else {
+          setSolidDoors([]);
+          setGlassDoors([]);
+          setDoorConfig({});
+        }
+
+        const drawerGroup = ig.find((g) => g.type === 'drawers');
+        if (drawerGroup?.parts?.length) {
+          setDrawerTargetGroups(drawerGroup.parts.map((p) => p.name));
+          const first = drawerGroup.parts[0];
+          setDrawerOpenZ(first?.openPosition ?? 0);
+        } else {
+          setDrawerTargetGroups([]);
+          setDrawerOpenZ(0);
+        }
+
+        setDrawerClosedZ(data.metadata?.drawers?.closedZ ?? 0);
+
+        setPanels(data.metadata?.panels || []);
+        setGlassPanels(data.metadata?.glassPanels || []);
+        setSolidDoorMeshPrefixes(data.metadata?.solidDoorMeshPrefixes || []);
+
+        setToGlass(data.doorTypeMap?.toGlass || {});
+        setToSolid(data.doorTypeMap?.toSolid || {});
+
+        const pc = {};
+        const ds = data.presets?.doorSelections || {};
+        Object.entries(ds).forEach(([dc, positions]) => {
+          pc[dc] = {};
+          Object.entries(positions || {}).forEach(([pos, cfg]) => {
+            pc[dc][pos] = { doors: cfg.doors || [], panels: cfg.panels || [], hide: cfg.hide || [] };
+          });
+        });
+        setPositionConfigs(pc);
+
+        setUiWidgets(data.uiWidgets || []);
+        setLights(data.lights || []);
+        setFeedback({ type: 'success', msg: 'Configuration loaded from file!' });
+      } catch (e) {
+        console.error(e);
+        setFeedback({ type: 'error', msg: 'Invalid JSON file' });
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(finalConfig, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -461,6 +542,18 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <section className="card">
           <h3>Basic & Assets</h3>
+          <div style={{ marginBottom: 12 }}>
+            <button 
+              onClick={loadConfigFromFile} 
+              className="btn-secondary"
+              style={{ backgroundColor: '#f59e0b', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}
+            >
+              � Load Config from File
+            </button>
+            <span style={{ marginLeft: 8, fontSize: '12px', color: '#666' }}>
+              Upload a JSON configuration file to auto-fill the form
+            </span>
+          </div>
           <div className="grid">
             <label>Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Model name" /></label>
             <label>Base
@@ -583,6 +676,7 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
               <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
                 <select value={w.type} onChange={(e) => setUiWidgets((arr) => { const copy = [...arr]; copy[i] = { ...copy[i], type: e.target.value }; return copy; })}>
                   <option value="doorPresets">Door Presets</option>
+                  <option value="resetWidget">Reset Widget</option>
                   <option value="lightWidget">Light Widget</option>
                   <option value="globalTextureWidget">Global Texture Widget</option>
                   <option value="textureWidget">Texture Widget</option>
@@ -628,9 +722,23 @@ export default function ModelConfigGenerator({ onSave, onConfigGenerated }) {
 
         <section className="card">
           <h3>Import JSON</h3>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', marginBottom: 8 }}>
+              Upload JSON File:
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={handleJsonUpload}
+                style={{ marginLeft: 8 }}
+              />
+            </label>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <strong>Or paste JSON below:</strong>
+          </div>
           <textarea rows={6} placeholder="Paste JSON here" value={importText} onChange={(e) => setImportText(e.target.value)} />
           <div style={{ marginTop: 6 }}>
-            <button onClick={importJson}>Import</button>
+            <button onClick={importJson}>Import from Text</button>
           </div>
         </section>
       </div>

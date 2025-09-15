@@ -341,8 +341,7 @@ const ModelManagement = () => {
       </div>
       <div className="toolbar-row" style={{display:'flex', gap:8}}>
         <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model (Simple)</button>
-        <button className="btn-secondary" onClick={()=>setShowAddMultiAsset(true)}>Add Model (Multi-Asset)</button>
-  {/* Generator access removed */}
+        {/* Multi-asset upload now opened from the Simple modal's "Upload multiple" button to avoid duplicate flows */}
       </div>
       <div className="models-grid">
         {modelEntries.map(([modelName, config]) => (
@@ -356,7 +355,7 @@ const ModelManagement = () => {
           />
         ))}
       </div>
-      {showAdd && <AddModelModalSimple onClose={()=>setShowAdd(false)} onAdd={handleAddModel} />}
+  {showAdd && <AddModelModalSimple onClose={()=>setShowAdd(false)} onAdd={handleAddModel} onOpenMultiAsset={() => setShowAddMultiAsset(true)} />}
       {showAddMultiAsset && <AddModelModalMultiAsset onClose={()=>setShowAddMultiAsset(false)} onAdd={handleAddModel} />}
       {showEdit && editModel && (
         <AddModelModalSimple

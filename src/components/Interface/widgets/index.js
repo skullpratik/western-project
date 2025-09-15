@@ -1,4 +1,5 @@
 import { DoorPresetWidget } from "./DoorPresetWidget";
+import { ResetWidget } from "./ResetWidget";
 import { TextureWidget } from "../TextureWidget";
 import { DoorControls } from "../controls/DoorControls";
 import { LightWidget } from "../LightWidget";
@@ -34,6 +35,7 @@ function DrawerToggles({ config, api }) {
 // Registry mapping widget type keys (used in modelsConfig) to React components.
 export const widgetRegistry = {
   doorPresets: DoorPresetWidget,
+  resetWidget: ResetWidget,
   doorToggles: DoorToggles,
   drawerToggles: DrawerToggles,
   texture: TextureWidget,
