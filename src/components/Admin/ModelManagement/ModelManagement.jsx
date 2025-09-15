@@ -204,6 +204,45 @@ const ModelManagement = () => {
     }
   };
 
+  // Called after editing an existing model to refresh the list
+  const handleUpdateModel = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/admin/models`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const models = await response.json();
+        setDbModels(models);
+        // Preload the edited model if we have its id
+        const updated = models.find(m => m._id === editModel?._id);
+        if (updated) {
+          try {
+            useGLTF.preload(`${API_BASE_URL}/models/${updated.file}`);
+          } catch (e) {
+            console.warn('Failed to preload updated model:', e);
+          }
+        }
+
+        // Notify other parts of app
+        window.dispatchEvent(new Event('modelsUpdated'));
+      }
+
+      setShowEdit(false);
+      setEditModel(null);
+    } catch (err) {
+      console.error('Error refreshing models after update:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEditModel = (config) => {
     const originalModel = dbModels.find(model => model._id === (config.id || config._id));
     if (originalModel) {
