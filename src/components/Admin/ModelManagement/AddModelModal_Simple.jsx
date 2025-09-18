@@ -1,11 +1,37 @@
 import React, { useEffect, useRef, useState } from 'react';
+// ...existing code...
 
 const API_BASE_URL = 'http://localhost:5000';
 
 export default function AddModelModalSimple({ onClose, onAdd, editModel = null, isEditMode = false, onOpenMultiAsset = null }) {
+  // For config file editing
+  const [configContent, setConfigContent] = useState('');
+  const [configLoadError, setConfigLoadError] = useState('');
   const [name, setName] = useState(editModel?.name || '');
   const [modelPath, setModelPath] = useState(editModel?.file || editModel?.path || '');
   const [configUrl, setConfigUrl] = useState(editModel?.configUrl || '');
+  // Fetch config JSON if editing and configUrl is present
+  useEffect(() => {
+    if (isEditMode && configUrl && configUrl.endsWith('.json')) {
+      // Try to fetch config JSON
+      const fetchConfig = async () => {
+        try {
+          setConfigLoadError('');
+          const url = configUrl.startsWith('http') ? configUrl : `${API_BASE_URL}${configUrl}`;
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Failed to fetch config: ${res.status}`);
+          const json = await res.json();
+          setConfigContent(JSON.stringify(json, null, 2));
+        } catch (err) {
+          setConfigLoadError(err.message || 'Failed to load config');
+        }
+      };
+      fetchConfig();
+    } else {
+      setConfigContent('');
+      setConfigLoadError('');
+    }
+  }, [isEditMode, configUrl]);
   const [uploadingModel, setUploadingModel] = useState(false);
   const [uploadingConfig, setUploadingConfig] = useState(false);
   const [uploadingAssets, setUploadingAssets] = useState(false);
@@ -159,6 +185,24 @@ export default function AddModelModalSimple({ onClose, onAdd, editModel = null, 
     };
     input.click();
   };
+
+  // Save edited config (overwrites existing config file)
+  async function handleConfigSave() {
+    try {
+      setUploadingConfig(true);
+      setError('');
+      // Save as new file and update configUrl
+      const blob = new Blob([configContent], { type: 'application/json' });
+      const file = new File([blob], `config-${Date.now()}.json`, { type: 'application/json' });
+      const path = await uploadFile(file, 'configs');
+      setConfigUrl(path);
+      alert('Config updated!');
+    } catch (err) {
+      setError(err.message || 'Failed to save config');
+    } finally {
+      setUploadingConfig(false);
+    }
+  }
 
   const handleConfigPick = () => {
     const input = document.createElement('input');
@@ -369,6 +413,25 @@ export default function AddModelModalSimple({ onClose, onAdd, editModel = null, 
                 {showPasteJSON ? 'Hide paste' : 'Paste JSON'}
               </button>
             </div>
+            {/* If configUrl is present and config loaded, show editable textarea */}
+            {isEditMode && configUrl && configContent && (
+              <div style={{ marginTop: 8 }}>
+                <span style={{ fontWeight: 500 }}>Edit Config File:</span>
+                <textarea
+                  value={configContent}
+                  onChange={e => setConfigContent(e.target.value)}
+                  rows={14}
+                  style={{ width: '100%', fontFamily: 'monospace', marginTop: 4, border: '1px solid #cbd5e1', borderRadius: 8, padding: 8 }}
+                />
+                <button type="button" className="btn-primary" style={{ marginTop: 6 }} onClick={handleConfigSave} disabled={uploadingConfig || !isLoggedIn || checkingAuth}>
+                  {uploadingConfig ? 'Saving…' : 'Save Config Changes'}
+                </button>
+                {configLoadError && <div style={{ color: '#b91c1c', marginTop: 4 }}>{configLoadError}</div>}
+              </div>
+            )}
+            {isEditMode && configUrl && configLoadError && (
+              <div style={{ color: '#b91c1c', marginTop: 4 }}>Failed to load config: {configLoadError}</div>
+            )}
           </label>
 
           {showPasteJSON && (
