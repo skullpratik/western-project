@@ -34,7 +34,7 @@ export function Interface({
 
     // If the model has door presets but no doorPresets widget configured, inject it automatically
     const hasDoorPresetsConfig = !!config?.presets?.doorSelections && Object.keys(config.presets.doorSelections).length > 0;
-    const hasDoorWidget = rawWidgets.some(w => w.type === 'doorPresets');
+    const hasDoorWidget = rawWidgets.some(w => w.type === 'doorPresets' || w.type === 'doorPresetWidget');
     if (hasDoorPresetsConfig && !hasDoorWidget) {
       rawWidgets = [{ type: 'doorPresets', title: 'Door Presets' }, ...rawWidgets];
     }

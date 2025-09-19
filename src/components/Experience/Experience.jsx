@@ -28,6 +28,16 @@ export function Experience({
 }) {
   // Use provided modelConfig or fallback to allModels
   const config = modelConfig || (allModels && allModels[modelName]);
+
+  // Debug logging: set `debugLogs: true` in model config to enable
+  const debug = !!config?.debugLogs;
+  const loggedKeysRef = useRef({});
+  const logOnce = (key, ...args) => {
+    if (!debug) return;
+    if (loggedKeysRef.current[key]) return;
+    loggedKeysRef.current[key] = true;
+    console.log(...args);
+  };
   
   // Guard against undefined config
   if (!config) {
@@ -66,35 +76,37 @@ export function Experience({
   } = useInteractions(allObjects, config);
 
   // Load the main model (base model)
-  console.log('Loading main model from:', config.path);
-  console.log('Full config object:', JSON.stringify(config, null, 2));
+  logOnce('load_model', 'Loading main model from:', config.path);
+  logOnce('config_snapshot', 'Full config object:', JSON.stringify(config, null, 2));
   const { scene: mainScene } = useGLTF(config.path);
-  console.log('Main scene loaded:', mainScene ? 'success' : 'failed');
+  logOnce('main_scene_loaded', 'Main scene loaded:', mainScene ? 'success' : 'failed');
 
   // Load ALL additional assets dynamically from config.assets (no manual config needed)
   const assetScenes = {};
   if (config.assets && typeof config.assets === 'object') {
-    console.log('[ASSETS] Loading assets from config:', Object.keys(config.assets));
+    logOnce('assets_list', '[ASSETS] Loading assets from config:', Object.keys(config.assets));
     Object.entries(config.assets).forEach(([assetKey, assetPath]) => {
       if (assetPath && typeof assetPath === 'string') {
         try {
           const { scene } = useGLTF(assetPath);
           assetScenes[assetKey] = scene;
-          console.log(`[ASSET] ${assetKey} loaded from: ${assetPath}`);
+          logOnce(`asset_loaded_${assetKey}`, `[ASSET] ${assetKey} loaded from: ${assetPath}`);
           let meshCount = 0;
           scene.traverse(obj => { if (obj.isMesh) meshCount++; });
-          console.log(`[ASSET] ${assetKey} mesh count: ${meshCount}`);
+          logOnce(`asset_meshcount_${assetKey}`, `[ASSET] ${assetKey} mesh count: ${meshCount}`);
         } catch (error) {
-          console.error(`[ASSET] Failed to load ${assetKey} from ${assetPath}:`, error);
+          if (debug) console.error(`[ASSET] Failed to load ${assetKey} from ${assetPath}:`, error);
         }
       }
     });
   } else {
-    console.log('[ASSETS] No assets found in config');
+    logOnce('assets_none', '[ASSETS] No assets found in config');
   }
 
   // Combine main scene with ALL asset scenes for placement calculations
   const allScenes = { base: mainScene, ...assetScenes };
+  // Stable key for assetScenes to use in hook dependency arrays (avoids changing-length deps)
+  const assetSceneKeys = Object.keys(assetScenes).sort().join("|");
 
   // Add all asset scenes to the main group for rendering
   useEffect(() => {
@@ -115,7 +127,7 @@ export function Experience({
         console.log(`[SCENE] Asset scene '${assetKey}' added to group`);
       }
     });
-  }, [mainScene, ...Object.values(assetScenes)]);
+  }, [mainScene, assetSceneKeys]);
 
   // Placement handling (admin transform preferred; else autofit/focused)
   useEffect(() => {
@@ -168,9 +180,9 @@ export function Experience({
     config?.modelPosition,
     config?.modelRotation,
     config?.modelScale,
-    // Use all asset scenes dynamically
+    // Use all asset scenes dynamically (stable key)
     mainScene,
-    ...Object.values(assetScenes),
+    assetSceneKeys,
     camera
   ]);
 
@@ -331,7 +343,28 @@ export function Experience({
   const setObjectVisibleRecursive = useCallback((obj, visible) => {
     if (!obj) return;
     obj.traverse((o) => {
-      if (o.isObject3D) o.visible = visible;
+      if (o.isObject3D) {
+        o.visible = visible;
+        // When hiding, also disable raycasting to avoid hidden parts intercepting clicks.
+        // Save original raycast so we can restore it when showing again.
+        try {
+          if (!visible) {
+            if (!o.userData) o.userData = {};
+            if (!o.userData._origRaycast && typeof o.raycast === 'function') {
+              o.userData._origRaycast = o.raycast;
+              o.raycast = () => [];
+            }
+          } else {
+            if (o.userData && o.userData._origRaycast) {
+              o.raycast = o.userData._origRaycast;
+              delete o.userData._origRaycast;
+            }
+          }
+        } catch (err) {
+          // Non-critical: if an object doesn't support raycast mutation, ignore.
+          if (debug) console.warn('Could not toggle raycast on object', o.name, err);
+        }
+      }
     });
   }, []);
 
@@ -396,12 +429,17 @@ export function Experience({
   });
 
   visibleDoors.forEach((doorName) => {
+    // Always hide both solid and glass versions first (prevents overlap)
+    setObjectVisibleRecursive(getObjectByLogicalName(doorName), false);
+    if (doorTypeMap?.toGlass?.[doorName]) {
+      setObjectVisibleRecursive(getObjectByLogicalName(doorTypeMap.toGlass[doorName]), false);
+    }
+    // Show only the selected type
     let targetName = doorName;
     if (showGlass && doorTypeMap?.toGlass?.[doorName]) {
       targetName = doorTypeMap.toGlass[doorName];
     }
-    const obj = getObjectByLogicalName(targetName);
-    if (obj) setObjectVisibleRecursive(obj, true);
+    setObjectVisibleRecursive(getObjectByLogicalName(targetName), true);
   });
 
     visiblePanels.forEach((panelName) => {
@@ -409,10 +447,25 @@ export function Experience({
       if (obj) setObjectVisibleRecursive(obj, true);
     });
 
+
     hiddenParts.forEach((name) => {
       const obj = getObjectByLogicalName(name);
       if (obj) setObjectVisibleRecursive(obj, false);
     });
+
+    // After hiding, show all drawers not in hiddenParts (universal/config-driven)
+    if (interactionGroups) {
+      interactionGroups.forEach((group) => {
+        if (group.type === "drawers") {
+          group.parts.forEach((drawer) => {
+            if (!hiddenParts.has(drawer.name)) {
+              const drawerObj = getObjectByLogicalName(drawer.name);
+              if (drawerObj) setObjectVisibleRecursive(drawerObj, true);
+            }
+          });
+        }
+      });
+    }
 
     // ensure drawers initial positions if any
     if (interactionGroups) {
@@ -422,7 +475,6 @@ export function Experience({
             const drawerObj = getObjectByLogicalName(drawer.name);
             if (!drawerObj) return;
             if (!hiddenParts.has(drawer.name)) {
-              drawerObj.visible = true;
               if (drawer.closedPosition !== undefined) {
                 const axis = drawer.positionAxis || "z";
                 drawerObj.position[axis] = drawer.closedPosition;
@@ -528,57 +580,10 @@ export function Experience({
   }, [onTogglePart, togglePart]);
 
   // -----------------------
-  // Click helpers & clickable surfaces
+  // Click helpers are created below inside the object-map effect so they are built
+  // after `allObjects.current` is populated. This avoids race conditions where
+  // helpers were created before objects existed and required many clicks.
   // -----------------------
-  useEffect(() => {
-    if (!interactionGroups) return;
-
-    // cleanup existing
-    clickHelpers.current.forEach((helper) => {
-      if (helper.parent) helper.parent.remove(helper);
-    });
-    clickHelpers.current.clear();
-
-    const interactiveObjects = [];
-    interactionGroups.forEach((group) => {
-      if (Array.isArray(group.parts)) {
-        group.parts.forEach((part) => {
-          const obj = allObjects.current[part.name];
-          if (obj) interactiveObjects.push({ obj, partName: part.name });
-        });
-      }
-    });
-
-    interactiveObjects.forEach(({ obj, partName }) => {
-      const bbox = new THREE.Box3();
-      let hasGeometry = false;
-      obj.traverse((child) => {
-        if (child.isMesh) {
-          bbox.expandByObject(child);
-          hasGeometry = true;
-        }
-      });
-      if (!hasGeometry || bbox.isEmpty()) return;
-
-      const size = bbox.getSize(new THREE.Vector3());
-      const center = bbox.getCenter(new THREE.Vector3());
-      const geometry = new THREE.BoxGeometry(size.x * 1.05, size.y * 1.05, size.z * 1.05);
-      const material = new THREE.MeshBasicMaterial({ visible: false, transparent: true, opacity: 0 });
-      const clickSurface = new THREE.Mesh(geometry, material);
-      clickSurface.name = `${partName}_clickSurface`;
-      clickSurface.position.copy(center);
-      clickSurface.visible = obj.visible;
-      obj.add(clickSurface);
-      clickHelpers.current.set(partName, clickSurface);
-    });
-
-    return () => {
-      clickHelpers.current.forEach((helper) => {
-        if (helper.parent) helper.parent.remove(helper);
-      });
-      clickHelpers.current.clear();
-    };
-  }, [config, interactionGroups, allObjects.current]);
 
   // -----------------------
   // Build object map + material logging
@@ -715,7 +720,7 @@ export function Experience({
       hasLights: (config.lights && config.lights.length > 0) || (config.metadata?.lights && config.metadata.lights.length > 0),
       interactiveParts: interactionGroups?.reduce((count, group) => count + (group.parts?.length || 0), 0) || 0
     });
-  }, [mainScene, ...Object.values(assetScenes), modelName, config, camera, interactionGroups, logInteraction]);
+  }, [mainScene, assetSceneKeys, modelName, config, camera, interactionGroups, logInteraction]);
 
   // init lights when objects ready
   useEffect(() => {
@@ -1438,24 +1443,28 @@ export function Experience({
     const picked = e.object;
     if (!picked || !picked.visible) return;
 
-    console.log('🖱️ CLICK DEBUG (Dynamic):');
-    console.log('  Clicked object:', picked.name);
+    if (debug) {
+      console.log('🖱️ CLICK DEBUG (Dynamic):');
+      console.log('  Clicked object:', picked.name);
+    }
 
-    // Use dynamic detection to find the interactive object
-    const interactiveObjectName = findInteractiveObjectName(picked.name);
+  // Use dynamic detection to find the interactive object (pass the actual object so any child mesh maps to the parent)
+  const interactiveObjectName = findInteractiveObjectName(picked);
     
-    console.log('🔍 Dynamic interaction search result:', interactiveObjectName);
+  if (debug) console.log('🔍 Dynamic interaction search result:', interactiveObjectName);
 
     if (interactiveObjectName) {
       // Diagnostic: log interaction type
-      try {
-        const itype = getInteractionType ? getInteractionType(interactiveObjectName) : null;
-        console.log('🔎 Interaction type detected for', interactiveObjectName, ':', itype);
-      } catch (err) {
-        console.warn('⚠️ getInteractionType failed:', err);
+      if (debug) {
+        try {
+          const itype = getInteractionType ? getInteractionType(interactiveObjectName) : null;
+          console.log('🔎 Interaction type detected for', interactiveObjectName, ':', itype);
+        } catch (err) {
+          console.warn('⚠️ getInteractionType failed:', err);
+        }
+        console.log(`✅ Found interactive object: ${interactiveObjectName}`);
+        console.log(`🎬 Calling togglePart for: ${interactiveObjectName}`);
       }
-      console.log(`✅ Found interactive object: ${interactiveObjectName}`);
-      console.log(`🎬 Calling togglePart for: ${interactiveObjectName}`);
       // Call the generic togglePart (from hook) if available - this should animate via GSAP
       if (typeof togglePart === 'function') {
         try {
@@ -1476,14 +1485,56 @@ export function Experience({
       }
       e.stopPropagation();
     } else {
-      console.log('❌ No interactive object found in hierarchy');
-      console.log('🔧 Clicked object hierarchy:');
-      let current = picked;
-      let level = 0;
-      while (current && level < 10) { // Limit to prevent infinite loops
-        console.log(`  Level ${level}: ${current.name || 'unnamed'}`);
-        current = current.parent;
-        level++;
+      // If the quick parent-hierarchy lookup failed, run a fallback broad raycast
+      // across all discovered objects. This helps when the clicked mesh isn't
+      // directly registered or when helper meshes aren't present.
+      if (debug) console.log('❌ No interactive object found via hierarchy. Attempting fallback raycast.');
+
+      try {
+        if (e.ray && Object.keys(allObjects.current || {}).length > 0) {
+          const raycaster = new THREE.Raycaster();
+          raycaster.set(e.ray.origin, e.ray.direction);
+          const candidates = Object.values(allObjects.current).filter(Boolean);
+          const intersects = raycaster.intersectObjects(candidates, true);
+          if (intersects && intersects.length > 0) {
+            const hit = intersects[0].object;
+            if (debug) console.log('🔍 Fallback intersect hit object:', hit.name || '(unnamed)');
+            const mapped = findInteractiveObjectName(hit);
+            if (mapped) {
+              if (debug) console.log('✅ Fallback mapped to interactive object:', mapped);
+              if (typeof togglePart === 'function') {
+                togglePart(mapped, 'auto');
+              } else {
+                const t = getInteractionType ? getInteractionType(mapped) : null;
+                if (t === 'door' && typeof toggleDoor === 'function') toggleDoor(mapped);
+                else if (t === 'drawer' && typeof toggleDrawer === 'function') toggleDrawer(mapped);
+                else console.warn('⚠️ No toggle function available for', mapped);
+              }
+              e.stopPropagation();
+              return;
+            } else {
+              if (debug) console.log('❌ Fallback intersect did not map to an interactive part');
+            }
+          } else {
+            if (debug) console.log('❌ Fallback raycast found no intersections');
+          }
+        } else {
+          if (debug) console.log('⚠️ No event.ray available or no objects to test for fallback');
+        }
+      } catch (err) {
+        console.error('❌ Fallback raycast failed:', err);
+      }
+
+      // Diagnostic: print clicked hierarchy if we still have no match
+      if (debug) {
+        console.log('🔧 Clicked object hierarchy:');
+        let current = picked;
+        let level = 0;
+        while (current && level < 10) { // Limit to prevent infinite loops
+          console.log(`  Level ${level}: ${current.name || 'unnamed'}`);
+          current = current.parent;
+          level++;
+        }
       }
     }
   };

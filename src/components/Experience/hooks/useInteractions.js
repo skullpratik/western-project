@@ -4,17 +4,27 @@ import gsap from "gsap";
 import * as THREE from "three";
 
 export function useInteractions(allObjects, config) {
+  const debug = !!config?.debugLogs;
+  const loggedKeys = {};
+  const logOnce = (key, ...args) => {
+    if (!debug) return;
+    if (loggedKeys[key]) return;
+    loggedKeys[key] = true;
+    console.log(...args);
+  };
+
   const doorStates = useRef({});
   const drawerStates = useRef({});
   const initialRotations = useRef({});
+  const initialQuaternions = useRef({});
   const initialPositions = useRef({});
 
   // Normalize config to a simple map shape once
   const getParts = () => {
     const parts = { doors: {}, drawers: {} };
-    console.log('🔧 useInteractions getParts() called');
-    console.log('🔧 Config:', config);
-    console.log('🔧 Config.interactionGroups:', config?.interactionGroups);
+  logOnce('getParts_called', '🔧 useInteractions getParts() called');
+  logOnce('config_snapshot', '🔧 Config snapshot (first call):', config);
+  logOnce('config_interactionGroups', '🔧 Config.interactionGroups (first call):', config?.interactionGroups);
     
     if (config && Array.isArray(config.interactionGroups)) {
       console.log(`🔧 Processing ${config.interactionGroups.length} interaction groups`);
@@ -33,8 +43,10 @@ export function useInteractions(allObjects, config) {
           group.parts.forEach((p) => {
             console.log(`🚪 Adding door part: ${p.name}`, p);
             parts.doors[p.name] = {
-              axis: p.rotationAxis || p.axis || "y",
+              axis: (p.rotationAxis || p.axis || "y").toLowerCase(),
               angle: p.openAngle ?? p.angle ?? 90,
+              // Optional direction: 1 (default) or -1 to invert
+              direction: p.rotationDirection ?? p.direction ?? p.openDirection ?? 1,
             };
           });
           return;
@@ -58,7 +70,7 @@ export function useInteractions(allObjects, config) {
     } else {
       console.warn('❌ No valid interactionGroups found in config');
     }
-    console.log('🔧 Final parts configuration:', parts);
+  if (debug) console.log('🔧 Final parts configuration:', parts);
     return parts;
   };
 
@@ -82,26 +94,39 @@ export function useInteractions(allObjects, config) {
     }
 
     const isOpen = doorStates.current[name] === "open";
-    const targetRotation = new THREE.Euler().copy(obj.rotation);
 
-    // Capture initial rotation once to support precise close
-    if (!initialRotations.current[name]) {
-      initialRotations.current[name] = obj.rotation.clone();
+    // Capture initial quaternion once to support precise close/open relative to local axes
+    if (!initialQuaternions.current[name]) {
+      initialQuaternions.current[name] = obj.quaternion.clone();
     }
-    
-    if (!isOpen) {
-      targetRotation[doorConfig.axis] += THREE.MathUtils.degToRad(doorConfig.angle);
-    } else {
-      // Close back to the captured initial rotation
-      targetRotation.copy(initialRotations.current[name]);
-    }
-    
-    gsap.to(obj.rotation, {
-      x: targetRotation.x,
-      y: targetRotation.y,
-      z: targetRotation.z,
+
+    const initialQuat = initialQuaternions.current[name].clone();
+
+    // Build local axis vector (object-local). We'll create a quaternion delta in local space
+    let axisVec = new THREE.Vector3(0, 1, 0);
+    if (doorConfig.axis === 'x') axisVec.set(1, 0, 0);
+    else if (doorConfig.axis === 'y') axisVec.set(0, 1, 0);
+    else if (doorConfig.axis === 'z') axisVec.set(0, 0, 1);
+
+    // delta quaternion representing the open rotation around the LOCAL axis
+    const angleRad = THREE.MathUtils.degToRad(doorConfig.angle * (doorConfig.direction || 1));
+    const deltaQuat = new THREE.Quaternion().setFromAxisAngle(axisVec, angleRad);
+
+    // When applying a local rotation, multiply initial quaternion by delta
+    const targetQuat = isOpen ? initialQuat.clone() : initialQuat.clone().multiply(deltaQuat);
+
+    // Animate quaternion components (GSAP can tween numeric fields)
+    gsap.to(obj.quaternion, {
+      x: targetQuat.x,
+      y: targetQuat.y,
+      z: targetQuat.z,
+      w: targetQuat.w,
       duration: 0.8,
       ease: "power2.out",
+      onUpdate: () => {
+        // Ensure quaternion stays normalized during the tween
+        obj.quaternion.normalize();
+      }
     });
 
     doorStates.current[name] = isOpen ? "closed" : "open";
@@ -205,26 +230,37 @@ export function useInteractions(allObjects, config) {
   };
 
   // New function to find the actual interactive object name in hierarchy
-  const findInteractiveObjectName = (clickedObjectName) => {
-    const clickedObj = allObjects.current[clickedObjectName];
-    if (!clickedObj) return null;
-    
+  // Accepts either a THREE.Object3D (preferred) or a string name.
+  const findInteractiveObjectName = (clicked) => {
+    let clickedObj = null;
     const parts = getParts();
-    
-    // Check the clicked object first
-    if (parts.doors[clickedObjectName] || parts.drawers[clickedObjectName]) {
-      return clickedObjectName;
+
+    // If the caller passed an object, use it directly
+    if (clicked && typeof clicked === 'object' && clicked.isObject3D) {
+      clickedObj = clicked;
+    } else if (typeof clicked === 'string') {
+      // Try to resolve name from allObjects map first
+      clickedObj = allObjects.current[clicked] || null;
     }
-    
-    // Traverse up the hierarchy to find the interactive parent
-    let current = clickedObj;
+
+    if (!clickedObj) {
+      return null;
+    }
+
+    // If the clicked object's name itself is an interactive part, return it
+    if (clickedObj.name && (parts.doors[clickedObj.name] || parts.drawers[clickedObj.name])) {
+      return clickedObj.name;
+    }
+
+    // Otherwise traverse up the parent chain to find an interactive ancestor
+    let current = clickedObj.parent;
     while (current) {
       if (current.name && (parts.doors[current.name] || parts.drawers[current.name])) {
         return current.name;
       }
       current = current.parent;
     }
-    
+
     return null;
   };
 

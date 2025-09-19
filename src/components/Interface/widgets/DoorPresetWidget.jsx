@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import "../Interface.css";
 
 export function DoorPresetWidget({ config, api }) {
@@ -15,19 +15,32 @@ export function DoorPresetWidget({ config, api }) {
     [doorSelections, doorCount]
   );
   const [doorPosition, setDoorPosition] = useState(positionsForCount[0] || "");
-  const [doorType, setDoorType] = useState("solid");
+  const doorTypeMap = config?.doorTypeMap || {};
+  // Door types from config (default to solid, add glass if mapping exists)
+  const availableDoorTypes = useMemo(() => {
+    const types = ["solid"];
+    if (doorTypeMap.toGlass && Object.keys(doorTypeMap.toGlass).length > 0) types.push("glass");
+    return types;
+  }, [doorTypeMap]);
+  const [doorType, setDoorType] = useState(availableDoorTypes[0] || "solid");
 
   // Keep selection valid when config changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (!availableCounts.includes(doorCount)) {
       setDoorCount(availableCounts[0] || "");
     }
   }, [availableCounts]);
-  React.useEffect(() => {
+  useEffect(() => {
     if (!positionsForCount.includes(doorPosition)) {
       setDoorPosition(positionsForCount[0] || "");
     }
   }, [positionsForCount]);
+  useEffect(() => {
+    // If available door types change, reset to first
+    if (!availableDoorTypes.includes(doorType)) {
+      setDoorType(availableDoorTypes[0] || "solid");
+    }
+  }, [availableDoorTypes]);
 
   if (!Object.keys(doorSelections).length) return null;
 
@@ -60,7 +73,11 @@ export function DoorPresetWidget({ config, api }) {
             >
               <option value="">Select Position</option>
               {positionsForCount.map((p) => (
-                <option key={p} value={p}>Position {p}</option>
+                <option key={p} value={p}>
+                  {doorSelections[String(doorCount)] && doorSelections[String(doorCount)][String(p)] && doorSelections[String(doorCount)][String(p)].label
+                    ? doorSelections[String(doorCount)][String(p)].label
+                    : `Position ${p}`}
+                </option>
               ))}
             </select>
           </div>
@@ -73,8 +90,12 @@ export function DoorPresetWidget({ config, api }) {
             value={doorType}
             onChange={(e) => setDoorType(e.target.value)}
           >
-            <option value="solid">🚪 Solid Door</option>
-            <option value="glass">🪟 Glass Door</option>
+            {availableDoorTypes.includes("solid") && (
+              <option value="solid">🚪 Solid Door</option>
+            )}
+            {availableDoorTypes.includes("glass") && (
+              <option value="glass">🪟 Glass Door</option>
+            )}
           </select>
         </div>
 

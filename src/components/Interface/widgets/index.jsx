@@ -10,6 +10,7 @@ import { DoorControls } from "../controls/DoorControls";
 
 export const widgetRegistry = {
   doorPresets: DoorPresetWidget,
+  doorPresetWidget: DoorPresetWidget,
   texture: TextureWidget,
   textureWidget: TextureWidget,
   globalTextureWidget: GlobalTextureWidget,

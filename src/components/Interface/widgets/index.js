@@ -35,6 +35,7 @@ function DrawerToggles({ config, api }) {
 // Registry mapping widget type keys (used in modelsConfig) to React components.
 export const widgetRegistry = {
   doorPresets: DoorPresetWidget,
+  doorPresetWidget: DoorPresetWidget,
   resetWidget: ResetWidget,
   doorToggles: DoorToggles,
   drawerToggles: DrawerToggles,
