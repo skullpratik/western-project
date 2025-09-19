@@ -48,11 +48,50 @@ export const TextureWidget = ({ config, applyRequest }) => {
     }
 
     // Send the texture source and mapping config to Experience
-    if (applyRequest?.current && typeof applyRequest.current === "function") {
-      applyRequest.current(selectedPart, textureSource, partConfig.mapping);
-      console.log(`✅ Texture request sent for ${selectedPart}`);
-    } else {
+    console.log('🔔 TextureWidget: handleApply called', { selectedPart, textureSourceType: (textureSource instanceof File) ? 'File' : typeof textureSource, hasApplyRequest: !!applyRequest?.current });
+    if (!applyRequest?.current || typeof applyRequest.current !== "function") {
       console.warn("⚠️ applyRequest ref not provided from App.jsx");
+      return;
+    }
+
+    // If the selected part has a 'targets' array, apply to each target sequentially
+    if (partConfig.targets && Array.isArray(partConfig.targets) && partConfig.targets.length > 0) {
+      // We'll call applyRequest.current for each target, reusing the same textureSource
+      const promises = partConfig.targets.map((t) => {
+        try {
+          if (t.type === 'material') {
+            // material targeting uses special __material:Name syntax
+            const materialKey = `__material:${t.materialName || t.name}`;
+            return applyRequest.current(materialKey, textureSource, { ...partConfig.mapping, persist: false });
+          }
+          // default to mesh target
+          const meshName = t.name;
+          return applyRequest.current(meshName, textureSource, { ...partConfig.mapping, persist: false });
+        } catch (err) {
+          return Promise.reject(err);
+        }
+      });
+
+      // Log combined result
+      Promise.all(promises)
+        .then(() => console.log(`✅ Texture applied to grouped targets for ${selectedPart}`))
+        .catch(err => console.error(`❌ Error applying grouped texture for ${selectedPart}:`, err));
+
+      return;
+    }
+
+    // Standard single-part flow
+    try {
+      // Non-persistent preview apply (persist:false)
+      const res = applyRequest.current(selectedPart, textureSource, { ...partConfig.mapping, persist: false });
+      // If it returns a promise, log completion
+      if (res && typeof res.then === 'function') {
+        res.then(() => console.log(`✅ Texture request completed for ${selectedPart}`)).catch(err => console.error(`❌ Texture request error for ${selectedPart}:`, err));
+      } else {
+        console.log(`✅ Texture request invoked for ${selectedPart}`);
+      }
+    } catch (err) {
+      console.error('❌ TextureWidget: exception calling applyRequest.current', err);
     }
   };
 

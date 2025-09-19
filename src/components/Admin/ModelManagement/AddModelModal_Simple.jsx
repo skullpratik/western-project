@@ -191,12 +191,42 @@ export default function AddModelModalSimple({ onClose, onAdd, editModel = null, 
     try {
       setUploadingConfig(true);
       setError('');
-      // Save as new file and update configUrl
-      const blob = new Blob([configContent], { type: 'application/json' });
+      // Try to parse JSON first
+      let parsed = null;
+      try {
+        parsed = JSON.parse(configContent);
+      } catch (err) {
+        throw new Error('Invalid JSON content - please fix before saving');
+      }
+
+      // If editing and configUrl references a local config file, attempt to overwrite it
+      if (isEditMode && configUrl && typeof configUrl === 'string' && configUrl.startsWith('/configs/')) {
+        const filename = configUrl.split('/configs/')[1];
+        if (!filename) throw new Error('Invalid local config path');
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE_URL}/api/configs/${filename}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(parsed)
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.message || `Failed to update config (${res.status})`);
+        }
+        // Successfully updated file in-place; keep configUrl unchanged
+        alert('Config updated in-place');
+        return;
+      }
+
+      // Fallback: Save as new file and update configUrl (existing behavior)
+      const blob = new Blob([JSON.stringify(parsed, null, 2)], { type: 'application/json' });
       const file = new File([blob], `config-${Date.now()}.json`, { type: 'application/json' });
       const path = await uploadFile(file, 'configs');
       setConfigUrl(path);
-      alert('Config updated!');
+      alert('Config uploaded as new file');
     } catch (err) {
       setError(err.message || 'Failed to save config');
     } finally {
@@ -426,6 +456,37 @@ export default function AddModelModalSimple({ onClose, onAdd, editModel = null, 
                 <button type="button" className="btn-primary" style={{ marginTop: 6 }} onClick={handleConfigSave} disabled={uploadingConfig || !isLoggedIn || checkingAuth}>
                   {uploadingConfig ? 'Saving…' : 'Save Config Changes'}
                 </button>
+                {isEditMode && configUrl && configUrl.startsWith('/configs/') && (
+                  <button type="button" className="btn-danger" style={{ marginTop: 6, marginLeft: 8 }} onClick={async () => {
+                    if (!confirm('Delete this config file from the server? This cannot be undone.')) return;
+                    try {
+                      setUploadingConfig(true);
+                      const filename = configUrl.split('/configs/')[1];
+                      const token = localStorage.getItem('token');
+                      const res = await fetch(`${API_BASE_URL}/api/configs/${filename}`, {
+                        method: 'DELETE',
+                        headers: {
+                          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        }
+                      });
+                      if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.message || `Delete failed (${res.status})`);
+                      }
+                      // Clear configUrl and configContent in the editor
+                      setConfigUrl('');
+                      setConfigContent('');
+                      alert('Config file deleted');
+                    } catch (err) {
+                      console.error('Failed to delete config file:', err);
+                      alert('Failed to delete config file: ' + (err.message || err));
+                    } finally {
+                      setUploadingConfig(false);
+                    }
+                  }}>
+                    Delete Config File
+                  </button>
+                )}
                 {configLoadError && <div style={{ color: '#b91c1c', marginTop: 4 }}>{configLoadError}</div>}
               </div>
             )}

@@ -114,7 +114,24 @@ export function Interface({
   // Function to save configuration
   const handleSaveConfig = async (configData) => {
     try {
-      const currentState = captureCurrentState();
+      // Capture current scene state from the Experience API
+      let currentState = captureCurrentState();
+
+      // If API exposes captureCurrentTextures, use it to include textures only when saving
+      if (api?.captureCurrentTextures) {
+        try {
+          const liveTextures = api.captureCurrentTextures();
+          currentState = {
+            ...currentState,
+            textureSettings: {
+              ...currentState.textureSettings,
+              ...liveTextures
+            }
+          };
+        } catch (err) {
+          console.warn('Failed to capture live textures for save:', err);
+        }
+      }
       
       const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/configs/save', {
@@ -235,8 +252,39 @@ export function Interface({
 
   // Render individual widget
   const renderWidget = (widget, index) => {
-    const WidgetComponent = widgetRegistry[widget.type];
-    
+    // Try direct lookup first
+    let WidgetComponent = widgetRegistry[widget.type];
+
+    // If not found, try common normalizations (lower-first-char, case-insensitive match,
+    // and stripping 'widget' suffix). This lets configs use variants like "GlobalTextureWidget"
+    // or different casing without breaking.
+    if (!WidgetComponent && widget.type) {
+      const lowerFirst = widget.type.charAt(0).toLowerCase() + widget.type.slice(1);
+      if (widgetRegistry[lowerFirst]) {
+        WidgetComponent = widgetRegistry[lowerFirst];
+        console.log(`🛠 Interface: normalized widget type '${widget.type}' -> '${lowerFirst}'`);
+      }
+    }
+
+    if (!WidgetComponent && widget.type) {
+      const wanted = widget.type.toLowerCase();
+      const foundKey = Object.keys(widgetRegistry).find(k => k.toLowerCase() === wanted);
+      if (foundKey) {
+        WidgetComponent = widgetRegistry[foundKey];
+        console.log(`🛠 Interface: matched widget type case-insensitively '${widget.type}' -> '${foundKey}'`);
+      }
+    }
+
+    if (!WidgetComponent && widget.type) {
+      // Try stripping suffix 'widget' and matching
+      const stripped = widget.type.replace(/widget$/i, '');
+      const foundKey = Object.keys(widgetRegistry).find(k => k.replace(/widget$/i, '').toLowerCase() === stripped.toLowerCase());
+      if (foundKey) {
+        WidgetComponent = widgetRegistry[foundKey];
+        console.log(`🛠 Interface: stripped suffix and matched '${widget.type}' -> '${foundKey}'`);
+      }
+    }
+
     if (!WidgetComponent) {
       console.error(`❌ Widget type "${widget.type}" not found in registry`);
       return <div style={{color: 'red', padding: '10px', border: '1px solid red', marginBottom: '12px'}}>

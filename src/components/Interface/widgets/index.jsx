@@ -3,6 +3,7 @@ import { DoorPresetWidget } from "./DoorPresetWidget";
 import { TextureWidget } from "./TextureWidget";
 import { LightWidget } from "./LightWidget";
 import GlobalTextureWidget from "./GlobalTextureWidget";
+import ColorPickerWidget from "./ColorPickerWidget";
 import { DoorControls } from "../controls/DoorControls";
 
 // ✅ Toggle widgets removed - using raycasting interactions instead
@@ -14,6 +15,8 @@ export const widgetRegistry = {
   texture: TextureWidget,
   textureWidget: TextureWidget,
   globalTextureWidget: GlobalTextureWidget,
+  colorPicker: ColorPickerWidget,
+  colorpicker: ColorPickerWidget,
   lightWidget: LightWidget,
   // Map missing widget types to existing components (excluding movement)
   reflectionWidget: LightWidget, // Reflection controls use light widget

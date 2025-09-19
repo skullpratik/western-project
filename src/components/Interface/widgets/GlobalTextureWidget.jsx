@@ -22,13 +22,21 @@ export default function GlobalTextureWidget({ applyRequest, modelName, editableP
   const handleApply = (texture) => {
     setSelected(texture.url);
     console.log("🌍 Applying global texture:", texture.name);
-    
-    applyRequest.current?.({
-      type: "global",
-      modelName,
-      texture: texture.file,  // Pass the file object instead of blob URL
-      exclude: editableParts
-    });
+    try {
+      console.log('🔔 GlobalTextureWidget: invoking applyRequest', { modelName, textureName: texture.name, hasApplyRequest: !!applyRequest?.current });
+      const result = applyRequest.current?.({
+        type: "global",
+        modelName,
+        texture: texture.file,  // Pass the file object instead of blob URL
+        exclude: editableParts,
+        persist: false // preview-only by default
+      });
+      if (result && typeof result.then === 'function') {
+        result.then(() => console.log('✅ Global texture applied successfully')).catch(err => console.error('❌ Global texture apply error:', err));
+      }
+    } catch (err) {
+      console.error('❌ GlobalTextureWidget: exception invoking applyRequest', err);
+    }
   };
 
   return (

@@ -1,6 +1,7 @@
 // src/components/Experience/Experience.jsx
 import * as THREE from "three";
 import React, { Suspense, useRef, useEffect, useState, useCallback } from "react";
+import { useFrame } from '@react-three/fiber';
 import { useThree } from "@react-three/fiber";
 import { Environment, OrbitControls, useGLTF, Html } from "@react-three/drei";
 // import { modelsConfig } from "../../modelsConfig"; // Removed - using dynamic configs only
@@ -51,7 +52,7 @@ export function Experience({
     return <mesh><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color="yellow" /></mesh>;
   }
   
-  const { camera, gl } = useThree();
+  const { camera, gl, scene: r3fScene } = useThree();
   const orbitControlsRef = useRef();
   const modelGroupRef = useRef();
   const [hoveredObject, setHoveredObject] = useState(null);
@@ -61,6 +62,7 @@ export function Experience({
   const [currentModelTransform, setCurrentModelTransform] = useState(null);
   const allObjects = useRef({});
   const clickHelpers = useRef(new Map());
+  const originalMaterials = useRef(new Map()); // Store original materials for glow restoration
 
   // Allow interactionGroups to be provided under metadata as well
   const interactionGroups = config.interactionGroups || config.metadata?.interactionGroups || [];
@@ -111,22 +113,63 @@ export function Experience({
   // Add all asset scenes to the main group for rendering
   useEffect(() => {
     if (!modelGroupRef.current) return;
-    // Remove previous children
-    while (modelGroupRef.current.children.length > 0) {
-      modelGroupRef.current.remove(modelGroupRef.current.children[0]);
+    // Defensive removal: iterate copy of children to avoid mutated array issues
+    try {
+      const childrenCopy = Array.from(modelGroupRef.current.children || []);
+      childrenCopy.forEach((child) => {
+        if (!child) return; // skip falsy entries
+        try {
+          if (modelGroupRef.current && typeof modelGroupRef.current.remove === 'function') {
+            modelGroupRef.current.remove(child);
+          } else {
+            // Fallback: manually splice out if remove is not available
+            const idx = modelGroupRef.current.children.indexOf(child);
+            if (idx >= 0) modelGroupRef.current.children.splice(idx, 1);
+          }
+        } catch (err) {
+          console.warn('[SCENE] Error removing child, attempting safe shift:', err);
+          // Remove leading falsy entries if necessary
+          try { modelGroupRef.current.children.shift(); } catch (e) { /* ignore */ }
+        }
+      });
+    } catch (outerErr) {
+      console.warn('[SCENE] Unexpected error while clearing children:', outerErr);
+      // Best-effort fallback: set children to empty array reference
+      try { modelGroupRef.current.children = []; } catch (e) { /* ignore */ }
     }
-    // Add main scene
-    if (mainScene) {
-      modelGroupRef.current.add(mainScene);
-      console.log('[SCENE] Main scene added to group');
+
+  // Add main scene (guarded)
+    if (mainScene && modelGroupRef.current) {
+      try {
+        if (typeof modelGroupRef.current.add === 'function') {
+          modelGroupRef.current.add(mainScene);
+        } else if (Array.isArray(modelGroupRef.current.children)) {
+          modelGroupRef.current.children.push(mainScene);
+        }
+        console.log('[SCENE] Main scene added to group');
+      } catch (err) {
+        console.warn('[SCENE] Failed to add mainScene to group:', err);
+      }
     }
-    // Add ALL asset scenes dynamically
+
+    // Add ALL asset scenes dynamically (guard each)
     Object.entries(assetScenes).forEach(([assetKey, scene]) => {
-      if (scene) {
-        modelGroupRef.current.add(scene);
+      if (!scene || !modelGroupRef.current) return;
+      try {
+        if (typeof modelGroupRef.current.add === 'function') {
+          modelGroupRef.current.add(scene);
+        } else if (Array.isArray(modelGroupRef.current.children)) {
+          modelGroupRef.current.children.push(scene);
+        }
         console.log(`[SCENE] Asset scene '${assetKey}' added to group`);
+      } catch (err) {
+        console.warn(`[SCENE] Failed to add asset scene '${assetKey}':`, err);
       }
     });
+    // Sanitize the group after modifications to avoid leaving falsy children
+    try { sanitizeSceneGraph(modelGroupRef.current); } catch (e) { /* ignore */ }
+    // Sanitize the top-level R3F scene as well to catch undefined entries anywhere
+    try { if (r3fScene) sanitizeSceneGraph(r3fScene); } catch (e) { /* ignore */ }
   }, [mainScene, assetSceneKeys]);
 
   // Placement handling (admin transform preferred; else autofit/focused)
@@ -287,6 +330,85 @@ export function Experience({
     setLights(lightObjects);
   }, [config.lights, config.metadata?.lights, resolveLightObject]);
 
+  // -----------------------
+  // Glow Effects for Meshes
+  // -----------------------
+  const applyGlowToMeshes = useCallback((meshNames, glowIntensity = 0.5, glowColor = "#ffffff") => {
+    if (!meshNames || !Array.isArray(meshNames)) return;
+
+    meshNames.forEach((meshName) => {
+      const meshObj = getObjectByLogicalName(meshName);
+      if (!meshObj) {
+        console.warn(`Glow mesh "${meshName}" not found`);
+        return;
+      }
+
+      meshObj.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+
+          materials.forEach((material, index) => {
+            if (!material) return;
+
+            // Store original material properties if not already stored
+            const materialKey = `${meshName}_${index}`;
+            if (!originalMaterials.current.has(materialKey)) {
+              originalMaterials.current.set(materialKey, {
+                emissive: material.emissive ? material.emissive.clone() : new THREE.Color(0x000000),
+                emissiveIntensity: material.emissiveIntensity || 0,
+                emissiveMap: material.emissiveMap ? material.emissiveMap.clone() : null
+              });
+            }
+
+            // Apply glow effect
+            if (!material.emissive) {
+              material.emissive = new THREE.Color(glowColor);
+            } else {
+              material.emissive.copy(new THREE.Color(glowColor));
+            }
+
+            material.emissiveIntensity = glowIntensity;
+            material.needsUpdate = true;
+          });
+        }
+      });
+
+      console.log(`✨ Applied glow to mesh: ${meshName}`);
+    });
+  }, []);
+
+  const removeGlowFromMeshes = useCallback((meshNames) => {
+    if (!meshNames || !Array.isArray(meshNames)) return;
+
+    meshNames.forEach((meshName) => {
+      const meshObj = getObjectByLogicalName(meshName);
+      if (!meshObj) return;
+
+      meshObj.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+
+          materials.forEach((material, index) => {
+            // Restore original material properties
+            const materialKey = `${meshName}_${index}`;
+            const originalProps = originalMaterials.current.get(materialKey);
+
+            if (originalProps) {
+              if (material.emissive) {
+                material.emissive.copy(originalProps.emissive);
+              }
+              material.emissiveIntensity = originalProps.emissiveIntensity;
+              material.emissiveMap = originalProps.emissiveMap;
+              material.needsUpdate = true;
+            }
+          });
+        }
+      });
+
+      console.log(`💫 Removed glow from mesh: ${meshName}`);
+    });
+  }, []);
+
   const toggleLight = useCallback(async (lightName, turnOn) => {
     // Check both config.lights and config.metadata.lights for light configuration
     const mergedLights = (config.lights && config.lights.length > 0) ? config.lights : (config.metadata?.lights || []);
@@ -308,14 +430,28 @@ export function Experience({
     lightObj.visible = !!turnOn;
     setLights((prev) => prev.map((l) => (l.name === (stateEntry?.name || lightName) ? { ...l, isOn: !!turnOn } : l)));
 
+    // Handle glow effects for specified meshes
+    if (lightConfig.glowMeshes && lightConfig.glowMeshes.length > 0) {
+      if (turnOn) {
+        applyGlowToMeshes(
+          lightConfig.glowMeshes,
+          lightConfig.glowIntensity || 0.5,
+          lightConfig.glowColor || "#ffffff"
+        );
+      } else {
+        removeGlowFromMeshes(lightConfig.glowMeshes);
+      }
+    }
+
     // Log light action
     await logInteraction("LIGHT_TOGGLE", {
       lightName,
       state: turnOn ? "ON" : "OFF",
       intensity: lightObj.intensity,
+      glowMeshes: lightConfig.glowMeshes,
       widgetType: "light"
     });
-  }, [config.lights, config.metadata?.lights, lights, resolveLightObject, logInteraction]);
+  }, [config.lights, config.metadata?.lights, lights, resolveLightObject, logInteraction, applyGlowToMeshes, removeGlowFromMeshes]);
 
   const toggleAllLights = useCallback(async (turnOn) => {
     const mergedLights = (config.lights && config.lights.length > 0) ? config.lights : (config.metadata?.lights || []);
@@ -325,6 +461,19 @@ export function Experience({
         const configLight = mergedLights.find((l) => l.name === light.name || l.meshName === light.name) || {};
         lightObj.intensity = turnOn ? (configLight.intensity || light.initialIntensity || 1.0) : 0;
         lightObj.visible = !!turnOn;
+
+        // Handle glow effects for this light
+        if (configLight.glowMeshes && configLight.glowMeshes.length > 0) {
+          if (turnOn) {
+            applyGlowToMeshes(
+              configLight.glowMeshes,
+              configLight.glowIntensity || 0.5,
+              configLight.glowColor || "#ffffff"
+            );
+          } else {
+            removeGlowFromMeshes(configLight.glowMeshes);
+          }
+        }
       }
     });
     setLights((prev) => prev.map((l) => ({ ...l, isOn: !!turnOn })));
@@ -334,8 +483,10 @@ export function Experience({
       state: turnOn ? "ON" : "OFF",
       widgetType: "light"
     });
-  }, [lights, config.lights, config.metadata?.lights, resolveLightObject, logInteraction]);
+  }, [lights, config.lights, config.metadata?.lights, resolveLightObject, logInteraction, applyGlowToMeshes, removeGlowFromMeshes]);
 
+  // -----------------------
+  // Glow Effects for Meshes
   // -----------------------
   // Door presets, interactions
   // -----------------------
@@ -376,13 +527,38 @@ export function Experience({
     const key = String(name).toLowerCase();
     const entries = Object.entries(allObjects.current || {});
     let best = null;
+    let bestName = null;
     for (const [n, o] of entries) {
       const nl = String(n).toLowerCase();
       if (nl === key) return o;
-      if (!best && (nl.startsWith(key) || nl.includes(key))) best = o;
+      if (!best && (nl.startsWith(key) || nl.includes(key))) {
+        best = o;
+        bestName = n;
+      }
+    }
+    // Debug fuzzy matching
+    if (best) {
+      console.log(`🔍 Fuzzy match: "${name}" -> "${bestName}"`);
+    } else {
+      console.log(`🔍 No fuzzy match found for: "${name}"`);
     }
     return best;
   }, []);
+
+  // Simple sanitization: remove invalid scene children only when needed
+  const sanitizeSceneGraph = useCallback((root) => {
+    if (!root || !root.children) return;
+    try {
+      const filtered = root.children.filter((c) => c && typeof c === 'object' && typeof c.visible !== 'undefined');
+      if (filtered.length !== root.children.length) {
+        root.children = filtered;
+      }
+    } catch (err) {
+      // Silent fail
+    }
+  }, []);
+
+  // Removed per-frame sanitization to improve performance
 
   // Use the toggle from the interactions hook which performs animated transitions
   const togglePart = interactionsTogglePart;
@@ -594,8 +770,8 @@ export function Experience({
     const roots = [mainScene, ...Object.values(assetScenes)].filter(Boolean);
     if (roots.length === 0) return;
 
+    // collect materials for debugging
     const materials = new Set();
-
     roots.forEach((root) => {
       root.traverse((child) => {
         if (child.isObject3D && child.name) {
@@ -821,42 +997,122 @@ export function Experience({
       console.log(`🔧 applyTextureToObject completed: ${materialsModified} materials modified`);
     };
 
-    // Main applyTexture function (supports File, dataURL string, or remote path)
-    const applyTexture = async (partName, fileOrPath, mappingConfig = {}) => {
-      console.log(`🎨 applyTexture called with:`, { partName, fileOrPath, mappingConfig });
-      
-      try {
-        const targetObj = allObjects.current[partName];
-        console.log(`🔍 Target object "${partName}" found:`, !!targetObj);
 
-        // If provided a File -> upload to server first, then use server path
+
+    // Main applyTexture function (supports File, dataURL string, or remote path)
+    // mappingConfig may include a `persist` boolean to indicate whether the applied texture
+    // should be saved into the model's appliedTextures state (persist=true by default).
+    const applyTexture = async (partName, fileOrPath, mappingConfig = {}, persist = mappingConfig.persist !== undefined ? mappingConfig.persist : false) => {
+      try {
+        // Debug: Log what we're searching for and available objects
+        console.log(`🔍 Searching for object: "${partName}"`);
+        console.log('📦 Available objects:', Object.keys(allObjects.current || {}));
+
+        // Use logical name resolver which performs fuzzy matching against allObjects
+        const targetObj = getObjectByLogicalName(partName);
+
+        // Show the result of the search
+        if (targetObj) {
+          console.log(`✅ Found object: "${targetObj.name}" for search "${partName}"`);
+        } else {
+          console.log(`❌ Object "${partName}" not found. Available objects:`, Object.keys(allObjects.current || {}));
+        }
+
+        // Handle color-only applies (no fileOrPath but mappingConfig.tintColor / color)
+        const tintColor = mappingConfig.tintColor || mappingConfig.color || null;
+        if ((fileOrPath === null || fileOrPath === undefined) && tintColor) {
+
+          // If targeting material name (special __material: prefix), apply to materials
+          if (typeof partName === 'string' && partName.startsWith('__material:')) {
+            const materialName = partName.replace('__material:', '').toLowerCase();
+            let appliedCount = 0;
+
+            Object.values(allObjects.current).forEach((obj) => {
+              if (obj && obj.isMesh && obj.material) {
+                const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                mats.forEach((mat) => {
+                  if (mat && mat.name && mat.name.toLowerCase() === materialName && mat.color) {
+                    mat.color.set(tintColor);
+                    mat.needsUpdate = true;
+                    appliedCount++;
+                  }
+                });
+              }
+            });
+
+            console.log(`Applied color to ${appliedCount} material(s)`);
+            return;
+          }
+
+          // Otherwise, apply color to the specific object (and its children)
+          const targetObjForColor = getObjectByLogicalName(partName);
+          if (!targetObjForColor) {
+            console.warn(`applyTexture (color): target object '${partName}' not found`);
+            return;
+          }
+
+          let modified = 0;
+          targetObjForColor.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach((mat) => {
+                if (mat && mat.color) {
+                  mat.color.set(tintColor);
+                  mat.needsUpdate = true;
+                  modified++;
+                }
+              });
+            }
+          });
+
+          console.log(`Applied color to ${modified} material(s) for object '${partName}'`);
+          return;
+        }
+
+        // Handle texture application
         let textureSrc = null;
         let textureServerPath = null;
         
         if (fileOrPath instanceof File) {
-          console.log(`📤 Uploading file to server: ${fileOrPath.name}`);
-          
-          // Upload file to server
-          const formData = new FormData();
-          formData.append('texture', fileOrPath);
-          
-          try {
-            const uploadResponse = await fetch('http://localhost:5000/api/upload-texture', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-              },
-              body: formData
+          // For preview-only applies we avoid uploading files to the server.
+          if (persist === false) {
+            console.log(`� Preview apply: reading file as data URL (no upload): ${fileOrPath.name}`);
+            textureSrc = await new Promise((res, rej) => {
+              const reader = new FileReader();
+              reader.onload = (ev) => res(ev.target.result);
+              reader.onerror = (err) => rej(err);
+              reader.readAsDataURL(fileOrPath);
             });
-            
-            if (uploadResponse.ok) {
-              const uploadResult = await uploadResponse.json();
-              textureServerPath = uploadResult.path;
-              textureSrc = uploadResult.path;
-              console.log(`✅ File uploaded to server: ${textureServerPath}`);
-            } else {
-              console.warn(`⚠️ Server upload failed, using data URL as fallback`);
-              // Fallback to data URL
+            textureServerPath = null;
+          } else {
+            console.log(`📤 Uploading file to server: ${fileOrPath.name}`);
+            // Upload file to server
+            const formData = new FormData();
+            formData.append('texture', fileOrPath);
+            try {
+              const uploadResponse = await fetch('http://localhost:5000/api/upload-texture', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: formData
+              });
+              if (uploadResponse.ok) {
+                const uploadResult = await uploadResponse.json();
+                textureServerPath = uploadResult.path;
+                textureSrc = uploadResult.path;
+                console.log(`✅ File uploaded to server: ${textureServerPath}`);
+              } else {
+                console.warn(`⚠️ Server upload failed, using data URL as fallback`);
+                textureSrc = await new Promise((res, rej) => {
+                  const reader = new FileReader();
+                  reader.onload = (ev) => res(ev.target.result);
+                  reader.onerror = (err) => rej(err);
+                  reader.readAsDataURL(fileOrPath);
+                });
+              }
+            } catch (uploadError) {
+              console.warn(`⚠️ Upload error, using data URL as fallback:`, uploadError);
               textureSrc = await new Promise((res, rej) => {
                 const reader = new FileReader();
                 reader.onload = (ev) => res(ev.target.result);
@@ -864,15 +1120,6 @@ export function Experience({
                 reader.readAsDataURL(fileOrPath);
               });
             }
-          } catch (uploadError) {
-            console.warn(`⚠️ Upload error, using data URL as fallback:`, uploadError);
-            // Fallback to data URL
-            textureSrc = await new Promise((res, rej) => {
-              const reader = new FileReader();
-              reader.onload = (ev) => res(ev.target.result);
-              reader.onerror = (err) => rej(err);
-              reader.readAsDataURL(fileOrPath);
-            });
           }
         } else if (typeof fileOrPath === "string") {
           textureSrc = fileOrPath;
@@ -889,21 +1136,22 @@ export function Experience({
         console.log(`🔍 Texture loaded successfully:`, !!texture);
 
         if (!targetObj) {
-          if (typeof partName === "string" && partName.startsWith("__material:")) {
-            const materialName = partName.replace("__material:", "");
+          if (typeof partName === 'string' && partName.startsWith('__material:')) {
+            const materialNameRaw = partName.replace('__material:', '');
+            const materialName = String(materialNameRaw || '').toLowerCase();
             let appliedCount = 0;
             Object.values(allObjects.current).forEach((obj) => {
               if (!obj) return;
               const checkAndApply = (mesh) => {
-                if (!mesh.material) return false;
+                if (!mesh || !mesh.material) return false;
                 if (Array.isArray(mesh.material)) {
-                  const has = mesh.material.some((m) => (m?.name || "(unnamed)") === materialName);
+                  const has = mesh.material.some((m) => String(m?.name || '(unnamed)').toLowerCase() === materialName);
                   if (has) {
                     applyTextureToObject(mesh, texture, mappingConfig);
                     return true;
                   }
                 } else {
-                  if ((mesh.material?.name || "(unnamed)") === materialName) {
+                  if (String(mesh.material?.name || '(unnamed)').toLowerCase() === materialName) {
                     applyTextureToObject(mesh, texture, mappingConfig);
                     return true;
                   }
@@ -914,22 +1162,34 @@ export function Experience({
               if (obj.isMesh) {
                 if (checkAndApply(obj)) appliedCount++;
               } else if (obj.children && obj.children.length) {
-                obj.traverse((child) => {
-                  if (child.isMesh && checkAndApply(child)) appliedCount++;
-                });
+                try {
+                  obj.traverse((child) => {
+                    if (child && child.isMesh && checkAndApply(child)) appliedCount++;
+                  });
+                } catch (e) {
+                  console.warn('Skipping traversal for object during material match:', obj.name, e);
+                }
               }
             });
 
+            // If nothing matched, show warning
+            if (appliedCount === 0) {
+              console.warn(`No material found matching '${materialNameRaw}'`);
+            }
             // Log material-based texture application
-            logInteraction("TEXTURE_APPLIED_MATERIAL", {
+            logInteraction('TEXTURE_APPLIED_MATERIAL', {
               materialName,
               appliedCount,
               textureSource: fileOrPath instanceof File ? fileOrPath.name : fileOrPath,
               mappingConfig,
-              widgetType: "texture"
+              widgetType: 'texture'
             });
 
             console.log(`✅ Applied texture to ${appliedCount} mesh(es) using material "${materialName}"`);
+
+            // Sanitize after material operations to clean up any invalid objects
+            try { sanitizeSceneGraph(modelGroupRef.current); } catch (e) { /* ignore */ }
+
             return;
           }
 
@@ -942,16 +1202,23 @@ export function Experience({
         await applyTextureToObject(targetObj, texture, mappingConfig);
         console.log(`🔧 Texture applied to object "${partName}" completed`);
 
-        // Track applied texture with model information
-        setAppliedTextures(prev => ({
-          ...prev,
-          [partName]: {
-            textureSource: textureServerPath || (fileOrPath instanceof File ? fileOrPath.name : fileOrPath),
-            mappingConfig,
-            modelName: modelName, // Track which model this texture belongs to
-            timestamp: new Date().toISOString()
-          }
-        }));
+        // Preview-only apply: do not persist into appliedTextures state here.
+        // Persistence must be performed explicitly via Save Configuration.
+        if (persist !== false) {
+          // If someone explicitly requested persistence, log a notice and persist
+          console.log(`⚠️ applyTexture: persistence requested for "${partName}" — persisting into appliedTextures`);
+          setAppliedTextures(prev => ({
+            ...prev,
+            [partName]: {
+              textureSource: textureServerPath || (fileOrPath instanceof File ? fileOrPath.name : fileOrPath),
+              mappingConfig,
+              modelName: modelName,
+              timestamp: new Date().toISOString()
+            }
+          }));
+        } else {
+          console.log(`💡 applyTexture: preview-only apply for "${partName}" (not persisted). Use Save Config to persist.`);
+        }
 
         // Log texture application
         logInteraction("TEXTURE_APPLIED", {
@@ -962,6 +1229,10 @@ export function Experience({
         });
 
         console.log(`✅ Applied texture to object "${partName}"`);
+
+        // Sanitize after texture operations to clean up any invalid objects
+        try { sanitizeSceneGraph(modelGroupRef.current); } catch (e) { /* ignore */ }
+
       } catch (err) {
         console.error("❌ Error in applyTexture:", err);
         logInteraction("TEXTURE_ERROR", {
@@ -983,6 +1254,8 @@ export function Experience({
       getInteractionType,
       toggleLight,
       toggleAllLights,
+      applyGlowToMeshes,
+      removeGlowFromMeshes,
   hasLights: !!((config.lights && config.lights.length > 0) || (config.metadata?.lights && config.metadata.lights.length > 0)),
       lights: lights.reduce((acc, l) => ((acc[l.name] = l.isOn), acc), {}),
       logInteraction, // Expose logging function to other components
@@ -1059,6 +1332,48 @@ export function Experience({
           };
         }
         return null;
+      },
+      // Capture current textures from scene materials into a textureSettings-like object
+      captureCurrentTextures: () => {
+        const textures = {};
+        try {
+          Object.entries(allObjects.current || {}).forEach(([name, obj]) => {
+            if (!obj) return;
+            // find first mesh descendant with a texture map
+            let found = null;
+            if (obj.isMesh && obj.material) found = obj;
+            if (!found && obj.children && obj.children.length) {
+              obj.traverse((child) => {
+                if (!found && child.isMesh && child.material) found = child;
+              });
+            }
+            if (found) {
+              const mats = Array.isArray(found.material) ? found.material : [found.material];
+              const matWithMap = mats.find(m => m && m.map && m.map.image);
+              if (matWithMap) {
+                const img = matWithMap.map.image;
+                const src = img?.currentSrc || img?.src || (matWithMap.map?.image && matWithMap.map.image.toString && matWithMap.map.image.toString()) || null;
+                textures[name] = {
+                  textureSource: src || '(in-memory)',
+                  mappingConfig: {},
+                  modelName: modelName,
+                  timestamp: new Date().toISOString()
+                };
+              }
+            }
+          });
+        } catch (err) {
+          console.warn('captureCurrentTextures failed:', err);
+        }
+        return textures;
+      },
+      // Persist captured textures into appliedTextures state (used after a save)
+      persistCapturedTextures: (textures) => {
+        if (!textures || typeof textures !== 'object') return;
+        setAppliedTextures(prev => ({
+          ...prev,
+          ...textures
+        }));
       },
       
       resetModelPosition: () => {
@@ -1291,9 +1606,11 @@ export function Experience({
     // Wire the applyRequest ref so UI can call:
     if (applyRequest) {
       applyRequest.current = async (partNameOrRequest, fileOrPath, mappingConfig = {}) => {
+        console.log('🔔 Experience.applyRequest called', { partNameOrRequestType: typeof partNameOrRequest, fileOrPathType: (fileOrPath instanceof File) ? 'File' : typeof fileOrPath });
         // Global object form
         if (typeof partNameOrRequest === "object" && partNameOrRequest?.type === "global") {
-          const { texture, materialName, exclude = [] } = partNameOrRequest;
+          // Default to preview-only (persist=false) unless explicitly requested
+          const { texture, materialName, exclude = [], persist = false } = partNameOrRequest;
           const widgetCfg = config.uiWidgets?.find((w) => w.type === "globalTextureWidget") || {};
           const defaultMaterialName = widgetCfg.options?.materialName || "Texture";
           const targetMaterialName = materialName || widgetCfg.options?.materialName || defaultMaterialName;
@@ -1302,28 +1619,50 @@ export function Experience({
           let textureServerPath = null;
           
           if (texture instanceof File) {
-            console.log(`📤 Uploading global texture file to server: ${texture.name}`);
-            
-            // Upload file to server first
-            const formData = new FormData();
-            formData.append('texture', texture);
-            
-            try {
-              const uploadResponse = await fetch('http://localhost:5000/api/upload-texture', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: formData
+            if (persist === false) {
+              console.log('📄 Preview apply for global texture: reading file as data URL (no upload)');
+              textureSrc = await new Promise((res, rej) => {
+                const reader = new FileReader();
+                reader.onload = (ev) => res(ev.target.result);
+                reader.onerror = (err) => rej(err);
+                reader.readAsDataURL(texture);
               });
-              
-              if (uploadResponse.ok) {
-                const uploadResult = await uploadResponse.json();
-                textureServerPath = uploadResult.path;
-                textureSrc = uploadResult.path;
-                console.log(`✅ Global texture uploaded to server: ${textureServerPath}`);
-              } else {
-                console.warn(`⚠️ Global texture server upload failed, using data URL as fallback`);
+              textureServerPath = null;
+            } else {
+              console.log(`📤 Uploading global texture file to server: ${texture.name}`);
+
+              // Upload file to server first
+              const formData = new FormData();
+              formData.append('texture', texture);
+
+              try {
+                const uploadResponse = await fetch('http://localhost:5000/api/upload-texture', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                  },
+                  body: formData
+                });
+
+                console.log('📡 upload-texture response status:', uploadResponse.status);
+
+                if (uploadResponse.ok) {
+                  const uploadResult = await uploadResponse.json();
+                  textureServerPath = uploadResult.path;
+                  textureSrc = uploadResult.path;
+                  console.log(`✅ Global texture uploaded to server: ${textureServerPath}`);
+                } else {
+                  console.warn(`⚠️ Server upload failed, using data URL as fallback - status: ${uploadResponse.status}`);
+                  // Fallback to data URL
+                  textureSrc = await new Promise((res, rej) => {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => res(ev.target.result);
+                    reader.onerror = (err) => rej(err);
+                    reader.readAsDataURL(texture);
+                  });
+                }
+              } catch (uploadError) {
+                console.warn(`⚠️ Global texture upload error, using data URL as fallback:`, uploadError);
                 // Fallback to data URL
                 textureSrc = await new Promise((res, rej) => {
                   const reader = new FileReader();
@@ -1332,15 +1671,6 @@ export function Experience({
                   reader.readAsDataURL(texture);
                 });
               }
-            } catch (uploadError) {
-              console.warn(`⚠️ Global texture upload error, using data URL as fallback:`, uploadError);
-              // Fallback to data URL
-              textureSrc = await new Promise((res, rej) => {
-                const reader = new FileReader();
-                reader.onload = (ev) => res(ev.target.result);
-                reader.onerror = (err) => rej(err);
-                reader.readAsDataURL(texture);
-              });
             }
           } else if (typeof texture === "string") {
             textureSrc = texture;
@@ -1387,19 +1717,23 @@ export function Experience({
             }
           });
 
-          // Track global texture application
-          setAppliedTextures(prev => ({
-            ...prev,
-            [`__global_${targetMaterialName}`]: {
-              textureSource: textureServerPath || (texture instanceof File ? texture.name : texture),
-              materialName: targetMaterialName,
-              excludedParts: exclude,
-              appliedCount: applied,
-              type: 'global',
-              modelName: modelName, // Track which model this global texture belongs to
-              timestamp: new Date().toISOString()
-            }
-          }));
+          // Track global texture application only if persist !== false
+          if (persist !== false) {
+            setAppliedTextures(prev => ({
+              ...prev,
+              [`__global_${targetMaterialName}`]: {
+                textureSource: textureServerPath || (texture instanceof File ? texture.name : texture),
+                materialName: targetMaterialName,
+                excludedParts: exclude,
+                appliedCount: applied,
+                type: 'global',
+                modelName: modelName, // Track which model this global texture belongs to
+                timestamp: new Date().toISOString()
+              }
+            }));
+          } else {
+            console.log(`💡 Global apply: preview-only for material "${targetMaterialName}" (not persisted)`);
+          }
 
           // Log global texture application
           logInteraction("GLOBAL_TEXTURE_APPLIED", {
@@ -1549,19 +1883,25 @@ export function Experience({
         {/* Render main model scene */}
         {mainScene && (
           <>
-            {console.log('Rendering main scene')}
+            {logOnce('render_main_scene', 'Rendering main scene')}
             <primitive object={mainScene} />
           </>
         )}
         {/* Render ALL additional asset scenes dynamically */}
-        {Object.entries(assetScenes).map(([assetKey, scene]) => (
-          scene && (
-            <React.Fragment key={assetKey}>
-              {console.log(`Rendering ${assetKey} asset`)}
-              <primitive object={scene} />
-            </React.Fragment>
-          )
-        ))}
+        {Object.entries(assetScenes).map(([assetKey, scene]) => {
+          if (!scene) return null;
+          try {
+            console.log(`Rendering ${assetKey} asset`);
+            return (
+              <React.Fragment key={assetKey}>
+                <primitive object={scene} />
+              </React.Fragment>
+            );
+          } catch (err) {
+            console.warn(`Skipping invalid asset scene '${assetKey}':`, err);
+            return null;
+          }
+        })}
       </group>
 
       <OrbitControls 

@@ -1,0 +1,116 @@
+{
+  "hideDoorsByDefault": false,
+  "lights": [
+    {
+      "name": "Point",
+      "defaultState": "off",
+      "intensity": 1,
+      "glowMeshes": [
+        "Cylinder001",
+        "Insidestrip1",
+        "Insidestrip2"
+      ],
+      "glowIntensity": 0.5,
+      "glowColor": "#ffffff"
+    }
+  ],
+  "interactionGroups": [
+    {
+      "type": "doors",
+      "label": "Door",
+      "parts": [
+        { "name": "Door", "rotationAxis": "z", "openAngle": 90 }
+      ]
+    },
+    {
+      "type": "toggles",
+      "label": "Point",
+      "parts": [
+        { "name": "Point", "label": "LED Light" }
+      ]
+    }
+  ],
+  "uiWidgets": [
+    { "type": "lightWidget", "title": "Light Control" },
+    {
+      "type": "textureWidget",
+      "title": "Textures",
+      "options": {
+        "parts": [
+          {
+            "name": "InsideStrips",
+            "label": "Inside Strips (group)",
+            "targets": [
+              { "type": "mesh", "name": "Insidestrip1" },
+              { "type": "mesh", "name": "Insidestrip2" },
+              { "type": "mesh", "name": "Insidestrip3" },
+              { "type": "mesh", "name": "Insidestrip4" },
+              { "type": "mesh", "name": "Insidestrip5" },
+              { "type": "mesh", "name": "Insidestrip6" }
+
+            ],
+            "mapping": {
+              "offset": { "x": 0, "y": -0.25 },
+              "center": { "x": 0.5, "y": -0.05 },
+              "flipY": false,
+              "repeat": { "x": 1, "y": 1.9 },
+              "wrapS": "ClampToEdgeWrapping",
+              "wrapT": "ClampToEdgeWrapping"
+            }
+          },
+          {
+            "name": "SidepannelRight",
+            "mapping": {
+              "flipY": false,
+              "offset": { "x": 1.5, "y": 0 },
+              "center": { "x": 0.5, "y": 0.5 },
+              "repeat": { "x": 3.2, "y": 0.9 },
+              "wrapS": "ClampToEdgeWrapping",
+              "wrapT": "ClampToEdgeWrapping"
+            }
+          },
+          {
+            "name": "SidepannelLeft",
+            "mapping": {
+              "flipY": false,
+              "offset": { "x": 1.25, "y": 0 },
+              "center": { "x": 0, "y": 0.5 },
+              "repeat": { "x": 3.2, "y": 0.9 },
+              "wrapS": "ClampToEdgeWrapping",
+              "wrapT": "ClampToEdgeWrapping"
+            }
+          },
+          {
+            "name": "Cylinder001"
+            
+          }
+        ],
+        "textures": [
+          { "name": "canopy", "path": "/texture/pepsicanopy.jpg" },
+          { "name": "Glass Clear", "path": "/textures/clear_glass.jpg" }
+        ]
+      }
+    },
+    {
+      "type": "colorPicker",
+      "title": "Color Picker",
+      "options": {
+        "parts": [
+          {
+            "name": "BodyMaterial",
+            "label": "Body (material)",
+            "type": "material",
+            "materialName": "FridgeColor"
+          },
+          {
+            "name": "handlecolor",
+            "label": "Door Handle (material)",
+            "type": "material",
+            "materialName": "handlecolor"
+          }
+        ]
+      }
+    }
+  ],
+  "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 }
+}
