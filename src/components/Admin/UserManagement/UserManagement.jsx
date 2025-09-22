@@ -47,11 +47,9 @@ const UserManagement = () => {
       drawerToggles: false,
       textureWidget: false,
       lightWidget: false,
-      globalTextureWidget: false,
-      // Add missing widget permissions
-      reflectionWidget: false,
-      movementWidget: false,
-      customWidget: false,
+  globalTextureWidget: false,
+  screenshotWidget: false,
+  // Removed reflectionWidget, movementWidget, customWidget
       saveConfig: false,
       canRotate: true,
       canPan: false,
@@ -288,16 +286,18 @@ const UserManagement = () => {
                   </div>
                 </div>
                 <div style={{display:'grid', gap:10, gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))'}}>
-                  {Object.entries(editingUser.permissions).map(([key, value]) => (
-                    <label key={key} style={{display:'flex', gap:6, alignItems:'center', fontSize:12, background:'var(--kt-surface-alt)', padding:'6px 8px', borderRadius:6, border:'1px solid var(--kt-border)'}}>
-                      <input
-                        type="checkbox"
-                        checked={value}
-                        onChange={(e) => handlePermissionChange(key, e.target.checked)}
-                      />
-                      {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                    </label>
-                  ))}
+                  {Object.entries(editingUser.permissions)
+                    .filter(([key]) => !["reflectionWidget","movementWidget","customWidget"].includes(key))
+                    .map(([key, value]) => (
+                      <label key={key} style={{display:'flex', gap:6, alignItems:'center', fontSize:12, background:'var(--kt-surface-alt)', padding:'6px 8px', borderRadius:6, border:'1px solid var(--kt-border)'}}>
+                        <input
+                          type="checkbox"
+                          checked={value}
+                          onChange={(e) => handlePermissionChange(key, e.target.checked)}
+                        />
+                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                      </label>
+                    ))}
                 </div>
               </div>
 
