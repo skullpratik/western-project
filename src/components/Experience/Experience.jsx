@@ -32,6 +32,7 @@ export function Experience({
 
   // Debug logging: set `debugLogs: true` in model config to enable
   const debug = !!config?.debugLogs;
+  // Hook-based logger helpers (declare before first use)
   const loggedKeysRef = useRef({});
   const logOnce = (key, ...args) => {
     if (!debug) return;
@@ -39,6 +40,8 @@ export function Experience({
     loggedKeysRef.current[key] = true;
     console.log(...args);
   };
+  // Log user permissions once to diagnose admin preview rotation issues
+  logOnce('user_permissions', 'User permissions passed to Experience:', userPermissions, 'user:', user);
   
   // Guard against undefined config
   if (!config) {
@@ -172,17 +175,54 @@ export function Experience({
     try { if (r3fScene) sanitizeSceneGraph(r3fScene); } catch (e) { /* ignore */ }
   }, [mainScene, assetSceneKeys]);
 
+  // Ensure OrbitControls are enabled for admin preview users (defensive):
+  useEffect(() => {
+    try {
+      const isPreview = user && typeof user.name === 'string' && user.name.includes('(Preview)');
+      const allowRotate = (userPermissions && userPermissions.canRotate) || isPreview || true;
+      if (orbitControlsRef.current) {
+        // Set both generic and specific flags
+        orbitControlsRef.current.enabled = allowRotate;
+        orbitControlsRef.current.enableRotate = allowRotate;
+        orbitControlsRef.current.enablePan = userPermissions?.canPan ?? true;
+        orbitControlsRef.current.enableZoom = userPermissions?.canZoom ?? true;
+        if (debug) console.log('🔐 OrbitControls forced state:', {
+          enabled: orbitControlsRef.current.enabled,
+          enableRotate: orbitControlsRef.current.enableRotate,
+          enablePan: orbitControlsRef.current.enablePan,
+          enableZoom: orbitControlsRef.current.enableZoom
+        });
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }, [orbitControlsRef.current, userPermissions, user]);
+
   // Placement handling (admin transform preferred; else autofit/focused)
   useEffect(() => {
     if (!modelGroupRef.current) return;
     // Wait until main scene is loaded
     if (!mainScene) return;
-
     const placementMode = config.placementMode || 'autofit';
-    const group = modelGroupRef.current;    // Reset any manual transforms first
-    group.position.set(0,0,0);
-    group.rotation.set(0,0,0);
-    group.scale.set(1,1,1);
+    const group = modelGroupRef.current;
+
+    // Avoid re-running placement for the same loaded model/assets (prevents reset during animations)
+    const modelKey = `${modelName}::${assetSceneKeys}`;
+    if (!group.__lastModelKey) group.__lastModelKey = null;
+    if (group.__lastModelKey === modelKey) {
+      // already applied for this model+assets
+      return;
+    }
+
+    // Mark that we're applying transforms for this model now
+    group.__lastModelKey = modelKey;
+
+    // Reset group transforms only when model changes
+    try {
+      group.position.set(0,0,0);
+      group.rotation.set(0,0,0);
+      group.scale.set(1,1,1);
+    } catch (e) { /* ignore */ }
 
     // If admin set explicit transform use it
     const hasAdminPos = Array.isArray(config.modelPosition) && config.modelPosition.length === 3;
@@ -198,15 +238,15 @@ export function Experience({
       console.log('🛠️ Applying admin transform', transform);
       applyModelTransform(group, transform);
       // Optionally adjust camera to frame model
-      autoFitModel(group, camera, orbitControlsRef.current, { centerModel: false, adjustCamera: true });
+      try { autoFitModel(group, camera, orbitControlsRef.current, { centerModel: false, adjustCamera: true }); } catch(e) { /* ignore */ }
     } else {
       // Else use placement mode
       if (placementMode === 'autofit') {
         console.log('🧭 Applying auto-fit placement');
-        autoFitModel(group, camera, orbitControlsRef.current, { centerModel: true, adjustCamera: true });
+        try { autoFitModel(group, camera, orbitControlsRef.current, { centerModel: true, adjustCamera: true }); } catch(e) { /* ignore */ }
       } else {
         console.log('🎯 Applying focused camera placement');
-        autoFitModel(group, camera, orbitControlsRef.current, { centerModel: false, adjustCamera: true });
+        try { autoFitModel(group, camera, orbitControlsRef.current, { centerModel: false, adjustCamera: true }); } catch(e) { /* ignore */ }
       }
     }
 
@@ -215,18 +255,18 @@ export function Experience({
       rotation: [group.rotation.x, group.rotation.y, group.rotation.z],
       scale: group.scale.x // uniform
     };
-  console.log('📐 Final applied group transform:', applied);
-  setCurrentModelTransform(applied);
+    console.log('📐 Final applied group transform:', applied);
+    setCurrentModelTransform(applied);
     if (onModelTransformChange) onModelTransformChange(applied);
   }, [
+    // Re-run placement only when the actual model or its assets change
+    mainScene,
+    assetSceneKeys,
+    modelName,
     config?.placementMode,
     config?.modelPosition,
     config?.modelRotation,
-    config?.modelScale,
-    // Use all asset scenes dynamically (stable key)
-    mainScene,
-    assetSceneKeys,
-    camera
+    config?.modelScale
   ]);
 
   // Clear applied textures when model changes
@@ -894,7 +934,7 @@ export function Experience({
     logInteraction("MODEL_LOADED", {
       modelName: config.name || modelName,
       hasLights: (config.lights && config.lights.length > 0) || (config.metadata?.lights && config.metadata.lights.length > 0),
-      interactiveParts: interactionGroups?.reduce((count, group) => count + (group.parts?.length || 0), 0) || 0
+      interactiveParts: Array.isArray(interactionGroups) ? interactionGroups.reduce((count, group) => count + (group.parts?.length || 0), 0) : 0
     });
   }, [mainScene, assetSceneKeys, modelName, config, camera, interactionGroups, logInteraction]);
 
@@ -906,6 +946,15 @@ export function Experience({
   // -----------------------
   // applyTexture & API exposure
   // -----------------------
+  // Debug overlay state (helps diagnose pointer/controls issues)
+  const [debugInfo, setDebugInfo] = useState({
+    orbitEnabled: !!(orbitControlsRef.current && orbitControlsRef.current.enabled),
+    lastPointerEvent: null,
+    lastInteractiveHandled: false,
+    modelKey: null
+  });
+  const debugInfoRef = useRef(debugInfo);
+  useEffect(() => { debugInfoRef.current = debugInfo; }, [debugInfo]);
   useEffect(() => {
     // Helper: load a texture (from URL or dataURL) only once and return Promise
     const loadTextureOnce = (src) =>
@@ -1831,11 +1880,132 @@ export function Experience({
     logInteraction
   ]);
 
+  // Simple overlay for debugging pointer events and OrbitControls
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const orbitEnabled = !!(orbitControlsRef.current && (typeof orbitControlsRef.current.enabled === 'boolean' ? orbitControlsRef.current.enabled : true));
+      setDebugInfo((d) => ({ ...d, orbitEnabled, modelKey: `${modelName}::${assetSceneKeys?.join?.(',') || ''}` }));
+    }, 500);
+    return () => clearInterval(interval);
+  }, [modelName, assetSceneKeys]);
+
+  // Hook into pointer events at window level to trace what reaches the canvas
+  useEffect(() => {
+    const onPointer = (e) => {
+      try {
+        setDebugInfo((d) => ({ ...d, lastPointerEvent: { type: e.type, x: e.clientX, y: e.clientY, time: Date.now() } }));
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    window.addEventListener('pointerdown', onPointer, true);
+    window.addEventListener('pointermove', onPointer, true);
+    window.addEventListener('pointerup', onPointer, true);
+
+    return () => {
+      window.removeEventListener('pointerdown', onPointer, true);
+      window.removeEventListener('pointermove', onPointer, true);
+      window.removeEventListener('pointerup', onPointer, true);
+    };
+  }, []);
+
+  // Render debug overlay into document body (minimal, non-intrusive)
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.id = 'r3f-debug-overlay';
+    Object.assign(el.style, {
+      position: 'fixed',
+      right: '12px',
+      bottom: '12px',
+      padding: '8px 10px',
+      background: 'rgba(0,0,0,0.6)',
+      color: 'white',
+      fontSize: '12px',
+      zIndex: 99999,
+      borderRadius: '6px',
+      maxWidth: '320px',
+      pointerEvents: 'none' // make overlay non-interactive so it doesn't capture clicks
+    });
+    document.body.appendChild(el);
+
+    const render = () => {
+      if (!el) return;
+      const d = debugInfoRef.current || {};
+      el.innerHTML = `
+        <div style="font-weight:600;margin-bottom:6px">R3F Debug</div>
+        <div>modelKey: <b>${d.modelKey || ''}</b></div>
+        <div>orbitEnabled: <b>${d.orbitEnabled}</b></div>
+        <div>lastEvent: <b>${d.lastPointerEvent ? d.lastPointerEvent.type : 'none'}</b></div>
+        <div>lastPos: <b>${d.lastPointerEvent ? d.lastPointerEvent.x + ',' + d.lastPointerEvent.y : '-'}</b></div>
+        <div>interactiveHandled: <b>${d.lastInteractiveHandled ? 'yes' : 'no'}</b></div>
+      `;
+    };
+
+    // initial render and periodic updater (no MutationObserver to avoid recursion)
+    render();
+    const updater = setInterval(render, 300);
+
+    // Listen for history/popstate changes to help diagnose route stuckness
+    const onPop = (ev) => {
+      console.log('🧭 Experience overlay detected popstate/navigation:', { location: window.location.href, state: ev.state });
+    };
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('pushstate', onPop);
+
+    return () => {
+      clearInterval(updater);
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('pushstate', onPop);
+      if (el.parentNode) el.parentNode.removeChild(el);
+    };
+  }, []);
+
+  // Instrument history methods and log mount/unmount to diagnose navigation issues
+  useEffect(() => {
+    console.log('▶️ Experience mounted for model:', modelName, 'location:', window.location.href);
+    let origPush = history.pushState;
+    let origReplace = history.replaceState;
+
+    const notify = (type, args) => {
+      console.log(`🧭 Experience detected navigation method: ${type}`, { href: window.location.href, args });
+    };
+
+    history.pushState = function(...args) {
+      const res = origPush.apply(this, args);
+      try { window.dispatchEvent(new Event('locationchange')); } catch (e) { /* ignore */ }
+      notify('pushState', args);
+      return res;
+    };
+
+    history.replaceState = function(...args) {
+      const res = origReplace.apply(this, args);
+      try { window.dispatchEvent(new Event('locationchange')); } catch (e) { /* ignore */ }
+      notify('replaceState', args);
+      return res;
+    };
+
+    const onLocationChange = (e) => {
+      console.log('🧭 Experience locationchange/popstate observed:', { href: window.location.href });
+    };
+    window.addEventListener('locationchange', onLocationChange);
+    window.addEventListener('popstate', onLocationChange);
+
+    return () => {
+      // restore
+      history.pushState = origPush;
+      history.replaceState = origReplace;
+      window.removeEventListener('locationchange', onLocationChange);
+      window.removeEventListener('popstate', onLocationChange);
+      console.log('◀️ Experience unmounted for model:', modelName, 'location:', window.location.href);
+    };
+  }, [modelName]);
+
+
   // -----------------------
   // Pointer handler for interactive selection - DYNAMIC VERSION
   // -----------------------
   const handlePointerDown = (e) => {
-    e.stopPropagation();
     const picked = e.object;
     if (!picked || !picked.visible) return;
 
@@ -1969,9 +2139,11 @@ export function Experience({
       <OrbitControls 
         ref={orbitControlsRef}
         target={config.camera?.target || config.metadata?.camera?.target || [0, 0, 0]}
-        enabled={userPermissions?.canRotate || false}
-        enablePan={userPermissions?.canPan || false}
-        enableZoom={userPermissions?.canZoom || false}
+        // Drei/three OrbitControls expects enableRotate; keep enabled as a safe fallback
+        enabled={userPermissions?.canRotate ?? true}
+        enableRotate={userPermissions?.canRotate ?? true}
+        enablePan={userPermissions?.canPan ?? true}
+        enableZoom={userPermissions?.canZoom ?? true}
       />
     </Suspense>
   );
