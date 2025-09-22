@@ -293,6 +293,8 @@ function MainApp() {
         <div className="canvas-container">
           <Canvas
             shadows
+            frameloop="demand"
+            dpr={Math.min(window.devicePixelRatio || 1, 1.5)}
             camera={{
               position: [2, 2, 2],
               fov: 25,

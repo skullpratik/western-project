@@ -1,5 +1,6 @@
 {
   "hideDoorsByDefault": false,
+  "debugLogs": false,
   "lights": [
     {
       "name": "Point",
@@ -19,7 +20,7 @@
       "type": "doors",
       "label": "Door",
       "parts": [
-        { "name": "Door", "rotationAxis": "z", "openAngle": 90 }
+        { "name": "Door", "rotationAxis": "x", "openAngle": 90 }
       ]
     },
     {
@@ -31,6 +32,7 @@
     }
   ],
   "uiWidgets": [
+    { "type": "presetWidget", "title": "Presets" },
     { "type": "lightWidget", "title": "Light Control" },
     {
       "type": "textureWidget",
@@ -87,6 +89,7 @@
           { "name": "canopy", "path": "/texture/pepsicanopy.jpg" },
           { "name": "Glass Clear", "path": "/textures/clear_glass.jpg" }
         ]
+        
       }
     },
     {
@@ -114,5 +117,56 @@
       "title": "Screenshot"
     }
   ],
-  "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 }
+  "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 },
+  "shadows": {
+    "enabled": true,
+    "position": [0, -0.5, 0],
+    "opacity": 0.4,
+    "scale": 8,
+    "blur": 2.5,
+    "far": 4.5,
+    "resolution": 512,
+    "color": "#000000"
+  }
+  ,
+  "presets": [
+    {
+      "id": "coke",
+      "label": "Coke Look",
+      "buttonColor": "#e41b17",
+      "buttonTextColor": "#ffffff",
+      "actions": [
+        { "part": "Cylinder001", "texture": "/pepsilogo.jpg", "mapping": { "repeat": { "x": 1, "y": 1 } } },
+        { "part": "Insidestrip1", "texture": "/cokestrip.jpg" },
+        { "part": "Insidestrip2", "texture": "/cokestrip.jpg" },
+        { "part": "Insidestrip3", "texture": "/cokestrip.jpg" },
+        { "part": "Insidestrip4", "texture": "/cokestrip.jpg" },
+        { "part": "Insidestrip5", "texture": "/cokestrip.jpg" },
+        { "part": "Insidestrip6", "texture": "cokestrip.jpg" },
+        {"part": "sidepannelRight", "texture": "/cocacolaside1.jpg" },
+        {"part": "sidepannelLeft", "texture": "/cocacolaside1.jpg" },
+        { "part": "__material:FridgeColor", "tintColor": "#e41b17" },
+        { "part": "__material:handlecolor", "tintColor": "#e41b17" }
+      ]
+    },
+    {
+      "id": "pepsi",
+      "label": "Pepsi Look",
+      "buttonColor": "#0057b8",
+      "buttonTextColor": "#ffffff",
+      "actions": [
+        { "part": "Cylinder001", "texture": "/pepsicanopy.jpg" },
+        { "part": "Insidestrip1","texture": "/pepsistrip.jpg" },
+        { "part": "Insidestrip2", "texture": "/pepsistrip.jpg" },
+        { "part": "Insidestrip3", "texture": "/pepsistrip.jpg" },
+        { "part": "Insidestrip4", "texture": "/pepsistrip.jpg" },
+        { "part": "Insidestrip5", "texture": "/pepsistrip.jpg" },
+        { "part": "Insidestrip6", "texture": "/pepsistrip.jpg" },
+        {"part": "sidepannelRight", "texture": "/pepsisidepannel.jpg" },
+        {"part": "sidepannelLeft", "texture": "/pepsisidepannel.jpg" },
+        { "part": "__material:FridgeColor", "tintColor": "#0057b8" },
+        { "part": "__material:handlecolor", "tintColor": "#0057b8" }
+      ]
+    }
+  ]
 }

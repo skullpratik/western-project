@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
 
-export function ScreenshotWidget({ title = "Download Image", api }) {
+export function ScreenshotWidget({ title = "Download Image", api, userPermissions }) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [status, setStatus] = useState('');
+  const [selectedQuality, setSelectedQuality] = useState('average');
+
+  const allowedQualities = userPermissions?.imageDownloadQualities || ['average'];
+
+  const qualityOptions = {
+    average: { label: 'Average (720p)', width: 1280, height: 720 },
+    good: { label: 'Good (2K)', width: 2560, height: 1440 },
+    best: { label: 'Best (4K)', width: 3840, height: 2160 }
+  };
 
   const handleDownload = async () => {
     if (!api?.takeScreenshot) {
@@ -16,7 +25,8 @@ export function ScreenshotWidget({ title = "Download Image", api }) {
     setStatus('Capturing high-quality image...');
 
     try {
-      const success = await api.takeScreenshot();
+      const quality = qualityOptions[selectedQuality];
+      const success = await api.takeScreenshot(quality.width, quality.height);
       if (success) {
         setStatus('✅ Screenshot downloaded!');
         console.log('📸 Screenshot downloaded successfully');
@@ -37,6 +47,31 @@ export function ScreenshotWidget({ title = "Download Image", api }) {
     <div className="widget screenshot-widget">
       <h3>{title}</h3>
       <div className="widget-content">
+        <div style={{ marginBottom: '8px' }}>
+          <label style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)' }}>
+            Quality:
+          </label>
+          <select
+            value={selectedQuality}
+            onChange={(e) => setSelectedQuality(e.target.value)}
+            style={{
+              width: '100%',
+              marginTop: '4px',
+              padding: '4px 8px',
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              fontSize: '12px'
+            }}
+          >
+            {allowedQualities.map(quality => (
+              <option key={quality} value={quality}>
+                {qualityOptions[quality]?.label || quality}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           className="download-btn"
           onClick={handleDownload}

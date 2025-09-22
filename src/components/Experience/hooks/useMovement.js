@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
 export function useMovement(scene) {
@@ -23,7 +22,8 @@ export function useMovement(scene) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [position]);
 
-  useFrame(() => {
+  // Update scene position only when `position` changes instead of every frame
+  useEffect(() => {
     if (scene) scene.position.copy(position);
-  });
+  }, [scene, position]);
 }

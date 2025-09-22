@@ -19,7 +19,7 @@
       "type": "doors",
       "label": "Door",
       "parts": [
-        { "name": "Door", "rotationAxis": "y", "openAngle": 90 }
+        { "name": "Door", "rotationAxis": "x", "openAngle": 90 }
       ]
     },
     {
@@ -93,5 +93,15 @@
     },
     { "type": "screenshotWidget", "title": "Screenshot" }
   ],
-  "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 }
+  "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 },
+  "shadows": {
+    "enabled": true,
+    "position": [0, -0.16, 0],
+    "opacity": 0.8,
+    "scale": 8,
+    "blur": 2.5,
+    "far": 4.5,
+    "resolution": 512,
+    "color": "#000000"
+  }
 }

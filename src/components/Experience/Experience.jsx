@@ -3,7 +3,8 @@ import * as THREE from "three";
 import React, { Suspense, useRef, useEffect, useState, useCallback } from "react";
 import { useFrame } from '@react-three/fiber';
 import { useThree } from "@react-three/fiber";
-import { Environment, OrbitControls, useGLTF, Html } from "@react-three/drei";
+import { Environment, OrbitControls, useGLTF, Html, ContactShadows } from "@react-three/drei";
+import { EffectComposer, SSAO, Bloom, ToneMapping, SMAA } from "@react-three/postprocessing";
 // import { modelsConfig } from "../../modelsConfig"; // Removed - using dynamic configs only
 import { useInteractions } from "./hooks/useInteractions";
 import { logActivity } from "../../api/user";
@@ -56,8 +57,10 @@ export function Experience({
   }
   
   const { camera, gl, scene: r3fScene } = useThree();
+  const { invalidate } = useThree();
   const orbitControlsRef = useRef();
   const modelGroupRef = useRef();
+  const [isPerformanceMode, setIsPerformanceMode] = useState(false);
   const [hoveredObject, setHoveredObject] = useState(null);
   const [lights, setLights] = useState([]);
   const [doorSelections, setDoorSelections] = useState({ count: 0, selection: 0 });
@@ -174,6 +177,200 @@ export function Experience({
     // Sanitize the top-level R3F scene as well to catch undefined entries anywhere
     try { if (r3fScene) sanitizeSceneGraph(r3fScene); } catch (e) { /* ignore */ }
   }, [mainScene, assetSceneKeys]);
+
+  // Renderer tweaks: use physically correct lights and sRGB output for more realistic results
+  useEffect(() => {
+    try {
+      if (gl) {
+        gl.physicallyCorrectLights = true;
+        gl.outputEncoding = THREE.sRGBEncoding;
+        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMappingExposure = 1;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }, [gl]);
+
+  // Normalize materials and embedded lights on the loaded scene to avoid overly emissive or colored artifacts
+  useEffect(() => {
+    if (!mainScene) return;
+
+    // Defer heavy traversal to avoid blocking the main thread during initial load.
+    const timer = setTimeout(() => {
+      try {
+        let tempColor = new THREE.Color();
+        mainScene.traverse((child) => {
+          // Normalize mesh materials
+          if (child.isMesh && child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((mat) => {
+              if (!mat) return;
+
+                // Normalize material to consistent PBR appearance
+                try {
+                  // If material is not a PBR material, convert basic-like materials to MeshStandardMaterial
+                  const isPBRType = mat.type === 'MeshStandardMaterial' || mat.type === 'MeshPhysicalMaterial' || mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial;
+                  if (!isPBRType) {
+                    const newMat = new THREE.MeshStandardMaterial();
+                    // copy common maps and color where present
+                    if (mat.map) newMat.map = mat.map;
+                    if (mat.normalMap) newMat.normalMap = mat.normalMap;
+                    if (mat.roughnessMap) newMat.roughnessMap = mat.roughnessMap;
+                    if (mat.metalnessMap) newMat.metalnessMap = mat.metalnessMap;
+                    if (mat.aoMap) newMat.aoMap = mat.aoMap;
+                    if (mat.emissiveMap) newMat.emissiveMap = mat.emissiveMap;
+                    if (mat.color) newMat.color.copy(mat.color);
+                    // sensible defaults
+                    newMat.metalness = typeof mat.metalness !== 'undefined' ? mat.metalness : 0.0;
+                    newMat.roughness = typeof mat.roughness !== 'undefined' ? Math.max(mat.roughness ?? 0, 0.3) : 0.6;
+                    newMat.envMapIntensity = typeof mat.envMapIntensity !== 'undefined' ? mat.envMapIntensity : 1.0;
+                    mat = newMat;
+                  } else {
+                    // Clamp emissive and other PBR properties
+                    mat.emissiveIntensity = 0;
+                    if (mat.emissive && (mat.emissive.b > mat.emissive.r + 0.15 && mat.emissive.b > mat.emissive.g + 0.15)) {
+                      mat.emissive.set(0x000000);
+                    }
+                    if (typeof mat.envMapIntensity !== 'undefined') mat.envMapIntensity = Math.min(mat.envMapIntensity || 1, 1.0);
+                    if (typeof mat.roughness !== 'undefined') mat.roughness = Math.max(mat.roughness ?? 0, 0.15);
+                    if (typeof mat.metalness !== 'undefined') mat.metalness = Math.min(Math.max(mat.metalness ?? 0, 0), 1);
+                  }
+
+                  // Ensure textures use correct color space when available
+                  ['map','emissiveMap','roughnessMap','metalnessMap','normalMap','aoMap'].forEach((k) => {
+                    if (mat[k] && mat[k].colorSpace === undefined) {
+                      try { mat[k].colorSpace = THREE.SRGBColorSpace; } catch(e) { /* ignore */ }
+                    }
+                  });
+
+                  mat.needsUpdate = true;
+                } catch (e) {
+                  try { mat.needsUpdate = true; } catch(_) {}
+                }
+            });
+          }
+
+          // Disable any embedded lights inside the model (some exporters include lights)
+          if (child.isLight) {
+            try {
+              child.intensity = 0;
+              child.visible = false;
+            } catch (e) { /* ignore */ }
+          }
+        });
+      } catch (e) {
+        console.warn('[Experience] Failed to normalize scene materials/lights:', e);
+      }
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [mainScene]);
+
+  // Auto performance mode: detect heavy scenes and disable expensive features
+  useEffect(() => {
+    if (!mainScene) return;
+    try {
+      let meshCount = 0;
+      mainScene.traverse((c) => { if (c && c.isMesh) meshCount++; });
+      // If the scene is large, enable performance mode
+      if (meshCount > 500) {
+        console.warn('[Experience] Large scene detected, enabling performance mode (meshCount=', meshCount, ')');
+        setIsPerformanceMode(true);
+        // We no longer force DPR here; Canvas dpr is already capped. Keep changes non-surprising.
+      } else {
+        setIsPerformanceMode(false);
+      }
+    } catch (e) { /* ignore */ }
+  }, [mainScene, gl]);
+
+  // Optional in-page perf overlay & manual perf-mode via URL param: `?perf=1`
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has('perf')) return;
+      // Enable performance mode when overlay requested
+      setIsPerformanceMode(true);
+
+      const el = document.createElement('div');
+      Object.assign(el.style, {
+        position: 'fixed',
+        left: '8px',
+        top: '8px',
+        background: 'rgba(0,0,0,0.7)',
+        color: '#fff',
+        padding: '6px 8px',
+        fontSize: '12px',
+        zIndex: 2147483647,
+        borderRadius: '6px',
+        pointerEvents: 'none'
+      });
+      document.body.appendChild(el);
+
+      let last = performance.now();
+      let frames = 0;
+      let rafId = 0;
+
+      const tick = () => {
+        frames++;
+        const now = performance.now();
+        if (now - last >= 500) {
+          const fps = Math.round((frames * 1000) / (now - last));
+          frames = 0;
+          last = now;
+          const mem = (performance && performance.memory) ? Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) + 'MB' : 'n/a';
+          el.textContent = `FPS: ${fps} • JS Heap: ${mem} • PerfMode: ON`;
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+
+      return () => {
+        cancelAnimationFrame(rafId);
+        if (el.parentNode) el.parentNode.removeChild(el);
+      };
+    } catch (e) {
+      /* ignore */
+    }
+  }, []);
+
+  // Ensure environment/hdri is applied to all model materials after Environment loads
+  useEffect(() => {
+    try {
+      const env = r3fScene?.environment;
+      if (!env) return; // environment not yet ready
+
+      const applyEnvToScene = (sceneObj) => {
+        if (!sceneObj) return;
+        sceneObj.traverse((child) => {
+          if (!child.isMesh || !child.material) return;
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((mat) => {
+            if (!mat) return;
+            try {
+              // Only apply envMap for PBR-style materials
+              const isPBR = (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial || mat.roughness !== undefined || mat.metalness !== undefined);
+              if (isPBR) {
+                mat.envMap = env;
+                // Respect any existing envMapIntensity but provide a reasonable default
+                if (typeof mat.envMapIntensity === 'undefined' || mat.envMapIntensity === null) mat.envMapIntensity = 1.0;
+                mat.needsUpdate = true;
+              }
+            } catch (e) { /* ignore per-material errors */ }
+          });
+        });
+      };
+
+      // Apply to main scene and all assets
+      applyEnvToScene(mainScene);
+      Object.values(assetScenes).forEach((s) => applyEnvToScene(s));
+
+      // Also apply to top-level scene children if present
+      if (r3fScene) applyEnvToScene(r3fScene);
+    } catch (e) {
+      console.warn('[Experience] Failed to apply environment to materials:', e);
+    }
+  }, [r3fScene?.environment, mainScene, assetSceneKeys]);
 
   // Ensure OrbitControls are enabled for admin preview users (defensive):
   useEffect(() => {
@@ -1080,7 +1277,13 @@ export function Experience({
               if (obj && obj.isMesh && obj.material) {
                 const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
                 mats.forEach((mat) => {
+                  // Skip color change if a texture map already exists on this material
                   if (mat && mat.name && mat.name.toLowerCase() === materialName && mat.color) {
+                    if (mat.map) {
+                      // Material already has a texture map - do not override color
+                      if (debug) console.log(`Skipping color for material '${mat.name}' because it has a map`);
+                      return;
+                    }
                     mat.color.set(tintColor);
                     mat.needsUpdate = true;
                     appliedCount++;
@@ -1106,6 +1309,11 @@ export function Experience({
               const mats = Array.isArray(child.material) ? child.material : [child.material];
               mats.forEach((mat) => {
                 if (mat && mat.color) {
+                  // If the material already has a texture map, skip applying color to avoid overwriting user-applied textures
+                  if (mat.map) {
+                    if (debug) console.log(`Skipping tint for mesh '${child.name}' material '${mat.name}' because it has a map`);
+                    return;
+                  }
                   mat.color.set(tintColor);
                   mat.needsUpdate = true;
                   modified++;
@@ -1310,7 +1518,7 @@ export function Experience({
       logInteraction, // Expose logging function to other components
 
       // Screenshot functionality for ScreenshotWidget
-      takeScreenshot: async () => {
+      takeScreenshot: async (targetWidth = 1920, targetHeight = 1080) => {
         try {
           // Store original settings
           const originalPosition = camera.position.clone();
@@ -1348,13 +1556,10 @@ export function Experience({
             orbitControlsRef.current.update();
           }
 
-          // Increase canvas resolution for high-quality screenshot
-          const scaleFactor = Math.min(3, window.devicePixelRatio || 1);
-          const newWidth = Math.floor(originalSize.width * scaleFactor);
-          const newHeight = Math.floor(originalSize.height * scaleFactor);
-          gl.setSize(newWidth, newHeight, false);
-          gl.setPixelRatio(scaleFactor);
-          camera.aspect = newWidth / newHeight;
+          // Set canvas to target resolution
+          gl.setSize(targetWidth, targetHeight, false);
+          gl.setPixelRatio(1); // Use 1:1 pixel ratio for exact resolution
+          camera.aspect = targetWidth / targetHeight;
           camera.updateProjectionMatrix();
 
           // Render for stability
@@ -1364,7 +1569,7 @@ export function Experience({
           await new Promise(resolve => setTimeout(resolve, 50));
           gl.render(r3fScene, camera);
 
-          // Capture the high-resolution screenshot
+          // Capture the screenshot
           const canvas = gl.domElement;
           const dataURL = canvas.toDataURL('image/png', 1.0);
 
@@ -1880,86 +2085,45 @@ export function Experience({
     logInteraction
   ]);
 
-  // Simple overlay for debugging pointer events and OrbitControls
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const orbitEnabled = !!(orbitControlsRef.current && (typeof orbitControlsRef.current.enabled === 'boolean' ? orbitControlsRef.current.enabled : true));
-      setDebugInfo((d) => ({ ...d, orbitEnabled, modelKey: `${modelName}::${assetSceneKeys?.join?.(',') || ''}` }));
-    }, 500);
-    return () => clearInterval(interval);
-  }, [modelName, assetSceneKeys]);
+  // -----------------------
+  // Preset UI (e.g., Coke / Pepsi)
+  // Expect `config.presets` to be an array like:
+  // [{ id: 'coke', label: 'Coke Look', actions: [{ part: 'CanBody', texture: '/texture/pepsi.jpg', mapping: {} }, { part: 'Logo', tintColor: '#fff' }] }, ...]
+  // Each action can either specify `texture` (string path or dataURL) or `tintColor`.
+  const applyPreset = async (preset) => {
+    if (!preset || !Array.isArray(preset.actions)) return;
+    try {
+      for (const action of preset.actions) {
+        const part = action.part;
+        if (!part) continue;
 
-  // Hook into pointer events at window level to trace what reaches the canvas
-  useEffect(() => {
-    const onPointer = (e) => {
-      try {
-        setDebugInfo((d) => ({ ...d, lastPointerEvent: { type: e.type, x: e.clientX, y: e.clientY, time: Date.now() } }));
-      } catch (err) {
-        // ignore
+        if (action.texture) {
+          // Use the exposed applyRequest ref if available so admin code can persist, otherwise call internal API
+          if (applyRequest?.current) {
+            // Use preview-only unless persist flag provided
+            await applyRequest.current(part, action.texture, action.mapping || {});
+          } else if (typeof api?.applyTexture === 'function') {
+            await api.applyTexture(part, action.texture, action.mapping || {}, action.persist || false);
+          }
+        } else if (action.tintColor || action.color) {
+          const color = action.tintColor || action.color;
+          if (applyRequest?.current) {
+            await applyRequest.current(part, null, { tintColor: color });
+          } else if (typeof api?.applyTexture === 'function') {
+            await api.applyTexture(part, null, { tintColor: color });
+          }
+        }
       }
-    };
 
-    window.addEventListener('pointerdown', onPointer, true);
-    window.addEventListener('pointermove', onPointer, true);
-    window.addEventListener('pointerup', onPointer, true);
+      // Track preset application in state
+      setAppliedTextures(prev => ({ ...prev, __lastPreset: { id: preset.id || preset.label, timestamp: new Date().toISOString() } }));
+      await logInteraction('PRESET_APPLIED', { presetId: preset.id || preset.label, modelName: modelName });
+    } catch (e) {
+      console.error('Failed to apply preset', preset, e);
+    }
+  };
 
-    return () => {
-      window.removeEventListener('pointerdown', onPointer, true);
-      window.removeEventListener('pointermove', onPointer, true);
-      window.removeEventListener('pointerup', onPointer, true);
-    };
-  }, []);
-
-  // Render debug overlay into document body (minimal, non-intrusive)
-  useEffect(() => {
-    const el = document.createElement('div');
-    el.id = 'r3f-debug-overlay';
-    Object.assign(el.style, {
-      position: 'fixed',
-      right: '12px',
-      bottom: '12px',
-      padding: '8px 10px',
-      background: 'rgba(0,0,0,0.6)',
-      color: 'white',
-      fontSize: '12px',
-      zIndex: 99999,
-      borderRadius: '6px',
-      maxWidth: '320px',
-      pointerEvents: 'none' // make overlay non-interactive so it doesn't capture clicks
-    });
-    document.body.appendChild(el);
-
-    const render = () => {
-      if (!el) return;
-      const d = debugInfoRef.current || {};
-      el.innerHTML = `
-        <div style="font-weight:600;margin-bottom:6px">R3F Debug</div>
-        <div>modelKey: <b>${d.modelKey || ''}</b></div>
-        <div>orbitEnabled: <b>${d.orbitEnabled}</b></div>
-        <div>lastEvent: <b>${d.lastPointerEvent ? d.lastPointerEvent.type : 'none'}</b></div>
-        <div>lastPos: <b>${d.lastPointerEvent ? d.lastPointerEvent.x + ',' + d.lastPointerEvent.y : '-'}</b></div>
-        <div>interactiveHandled: <b>${d.lastInteractiveHandled ? 'yes' : 'no'}</b></div>
-      `;
-    };
-
-    // initial render and periodic updater (no MutationObserver to avoid recursion)
-    render();
-    const updater = setInterval(render, 300);
-
-    // Listen for history/popstate changes to help diagnose route stuckness
-    const onPop = (ev) => {
-      console.log('🧭 Experience overlay detected popstate/navigation:', { location: window.location.href, state: ev.state });
-    };
-    window.addEventListener('popstate', onPop);
-    window.addEventListener('pushstate', onPop);
-
-    return () => {
-      clearInterval(updater);
-      window.removeEventListener('popstate', onPop);
-      window.removeEventListener('pushstate', onPop);
-      if (el.parentNode) el.parentNode.removeChild(el);
-    };
-  }, []);
+  // Debug overlay removed in production - no UI debug overlay displayed
 
   // Instrument history methods and log mount/unmount to diagnose navigation issues
   useEffect(() => {
@@ -2107,9 +2271,58 @@ export function Experience({
 
   return (
     <Suspense fallback={null}>
-      <Environment preset="warehouse" />
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
+  {/* Studio lighting (universal product setup). When `isPerformanceMode` is true we
+      reduce or skip heavy lighting/features to keep interaction smooth. */}
+  {/* Always include HDRI environment so materials can sample it; lower intensity in perf mode */}
+  <Environment files="photo_studio_01_1k.hdr" background={false} intensity={isPerformanceMode ? 0.25 : 0.7} />
+
+  <color attach="background" args={['#7d7d7d']} />
+
+  {/* Subtle hemisphere for fill */}
+  <hemisphereLight skyColor={0xffffff} groundColor={0x444444} intensity={0.25} />
+
+  {/* Low ambient to lift shadows slightly */}
+  <ambientLight intensity={0.12} />
+
+  {/* Key light: soft, warm directional light */}
+  <directionalLight
+    name="KeyLight"
+    position={[4.5, 6, 5]}
+    intensity={0.95}
+    castShadow={false}
+    shadowBias={-0.0001}
+  />
+
+  {/* Fill light: cooler, lower intensity from opposite side */}
+  <directionalLight
+    name="FillLight"
+    position={[-4.5, 3.5, -2.5]}
+    intensity={0.45}
+    color={0xc6e0ff}
+    castShadow={false}
+  />
+
+  {/* Rim/back light to separate model from background */}
+  <directionalLight
+    name="RimLight"
+    position={[0, 5.5, -6]}
+    intensity={0.35}
+    color={0xfff1e6}
+    castShadow={false}
+  />
+
+  {/* Contact shadows only when not in performance mode (can be expensive) */}
+  {config?.shadows?.enabled !== false && !isPerformanceMode && (
+    <ContactShadows
+      position={config?.shadows?.position || [0, -2, 0]}
+      opacity={config?.shadows?.opacity || 0.35}
+      scale={config?.shadows?.scale || 8}
+      blur={config?.shadows?.blur || 2.0}
+      far={config?.shadows?.far || 4.5}
+      resolution={config?.shadows?.resolution || 512}
+      color={config?.shadows?.color || "#000000"}
+    />
+  )}
 
       <group ref={modelGroupRef} onPointerDown={handlePointerDown}>
         {/* Render main model scene */}
@@ -2135,6 +2348,7 @@ export function Experience({
           }
         })}
       </group>
+      {/* Presets are now rendered via the Interface widgets (PresetWidget) */}
 
       <OrbitControls 
         ref={orbitControlsRef}
@@ -2144,7 +2358,17 @@ export function Experience({
         enableRotate={userPermissions?.canRotate ?? true}
         enablePan={userPermissions?.canPan ?? true}
         enableZoom={userPermissions?.canZoom ?? true}
+        maxPolarAngle={Math.PI / 2}
+        onChange={() => {
+          // Render only when user interacts (frameloop='demand')
+          try { invalidate(); } catch(e) { /* ignore */ }
+        }}
       />
+
+      {/* Minimal post-processing for smooth rendering only */}
+      <EffectComposer>
+        <SMAA />
+      </EffectComposer>
     </Suspense>
   );
 }

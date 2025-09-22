@@ -54,7 +54,8 @@ const UserManagement = () => {
       canRotate: true,
       canPan: false,
       canZoom: false,
-      canMove: false
+      canMove: false,
+      imageDownloadQualities: ['average']
     };
 
     const completePermissions = { ...defaultPermissions, ...user.permissions };
@@ -155,15 +156,45 @@ const UserManagement = () => {
     }));
   };
 
+  const handleQualityChange = (quality, checked) => {
+    setEditingUser(prev => {
+      const currentQualities = prev.permissions.imageDownloadQualities || [];
+      const newQualities = checked
+        ? [...currentQualities, quality]
+        : currentQualities.filter(q => q !== quality);
+      return {
+        ...prev,
+        permissions: {
+          ...prev.permissions,
+          imageDownloadQualities: newQualities
+        }
+      };
+    });
+  };
+
   const grantAll = () => {
     if (!editingUser) return;
-    const allTrue = Object.keys(editingUser.permissions).reduce((acc, key) => ({ ...acc, [key]: true }), {});
+    const allTrue = Object.keys(editingUser.permissions).reduce((acc, key) => {
+      if (key === 'imageDownloadQualities') {
+        acc[key] = ['average', 'good', 'best'];
+      } else {
+        acc[key] = true;
+      }
+      return acc;
+    }, {});
     setEditingUser(prev => ({ ...prev, permissions: allTrue }));
   };
 
   const revokeAll = () => {
     if (!editingUser) return;
-    const allFalse = Object.keys(editingUser.permissions).reduce((acc, key) => ({ ...acc, [key]: false }), {});
+    const allFalse = Object.keys(editingUser.permissions).reduce((acc, key) => {
+      if (key === 'imageDownloadQualities') {
+        acc[key] = [];
+      } else {
+        acc[key] = false;
+      }
+      return acc;
+    }, {});
     setEditingUser(prev => ({ ...prev, permissions: allFalse }));
   };
 
@@ -287,7 +318,7 @@ const UserManagement = () => {
                 </div>
                 <div style={{display:'grid', gap:10, gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))'}}>
                   {Object.entries(editingUser.permissions)
-                    .filter(([key]) => !["reflectionWidget","movementWidget","customWidget"].includes(key))
+                    .filter(([key]) => !["reflectionWidget","movementWidget","customWidget","imageDownloadQualities"].includes(key))
                     .map(([key, value]) => (
                       <label key={key} style={{display:'flex', gap:6, alignItems:'center', fontSize:12, background:'var(--kt-surface-alt)', padding:'6px 8px', borderRadius:6, border:'1px solid var(--kt-border)'}}>
                         <input
@@ -298,6 +329,22 @@ const UserManagement = () => {
                         {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                       </label>
                     ))}
+                </div>
+              </div>
+
+              <div className="kt-card" style={{boxShadow:'none', border:'1px dashed var(--kt-border)'}}>
+                <div className="kt-card-header" style={{marginBottom:12}}>Image Download Qualities</div>
+                <div style={{display:'grid', gap:10, gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))'}}>
+                  {['average', 'good', 'best'].map(quality => (
+                    <label key={quality} style={{display:'flex', gap:6, alignItems:'center', fontSize:12, background:'var(--kt-surface-alt)', padding:'6px 8px', borderRadius:6, border:'1px solid var(--kt-border)'}}>
+                      <input
+                        type="checkbox"
+                        checked={(editingUser.permissions.imageDownloadQualities || []).includes(quality)}
+                        onChange={(e) => handleQualityChange(quality, e.target.checked)}
+                      />
+                      {quality.charAt(0).toUpperCase() + quality.slice(1)}
+                    </label>
+                  ))}
                 </div>
               </div>
 

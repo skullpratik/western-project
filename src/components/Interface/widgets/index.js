@@ -3,6 +3,7 @@ import { ResetWidget } from "./ResetWidget";
 import { TextureWidget } from "../TextureWidget";
 import { DoorControls } from "../controls/DoorControls";
 import { LightWidget } from "../LightWidget";
+import { PresetWidget } from './PresetWidget';
 
 function DoorToggles({ config, api }) {
   // Build a parts map similar to Interface so DoorControls can render
@@ -41,5 +42,7 @@ export const widgetRegistry = {
   drawerToggles: DrawerToggles,
   texture: TextureWidget,
   lightWidget: LightWidget,
+  presets: PresetWidget,
+  presetWidget: PresetWidget,
 };
 // default export intentionally removed; import via named export `widgetRegistry` or via index.jsx re-export

@@ -6,6 +6,7 @@ import GlobalTextureWidget from "./GlobalTextureWidget";
 import ColorPickerWidget from "./ColorPickerWidget";
 import { ScreenshotWidget } from "./ScreenshotWidget";
 import { DoorControls } from "../controls/DoorControls";
+import { PresetWidget } from './PresetWidget';
 
 // ✅ Toggle widgets removed - using raycasting interactions instead
 // All door/drawer interactions are now handled via raycasting with metadata from modelsConfig
@@ -24,6 +25,8 @@ export const widgetRegistry = {
   reflectionWidget: LightWidget, // Reflection controls use light widget
   customWidget: TextureWidget, // Custom widgets default to texture widget
   // movementWidget intentionally not mapped - will be filtered out
+  presets: PresetWidget,
+  presetWidget: PresetWidget,
 };
 
 export default widgetRegistry;
