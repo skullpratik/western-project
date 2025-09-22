@@ -47,7 +47,6 @@
               { "type": "mesh", "name": "Insidestrip4" },
               { "type": "mesh", "name": "Insidestrip5" },
               { "type": "mesh", "name": "Insidestrip6" }
-
             ],
             "mapping": {
               "offset": { "x": 0, "y": -0.25 },
@@ -82,7 +81,6 @@
           },
           {
             "name": "Cylinder001"
-            
           }
         ],
         "textures": [
@@ -110,6 +108,10 @@
           }
         ]
       }
+    },
+    {
+      "type": "screenshotWidget",
+      "title": "Screenshot"
     }
   ],
   "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 }

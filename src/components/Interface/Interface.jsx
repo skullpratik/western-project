@@ -221,9 +221,10 @@ export function Interface({
     // Map widget to backend permission keys; fall back to derived intents
     const permissionMap = {
       doorPresets: 'doorPresets',
-      globalTextureWidget: 'globalTextureWidget',
-      textureWidget: 'textureWidget',
-      lightWidget: 'lightWidget',
+  globalTextureWidget: 'globalTextureWidget',
+  textureWidget: 'textureWidget',
+  lightWidget: 'lightWidget',
+  screenshotWidget: 'screenshotWidget',
       reflectionWidget: 'lightWidget', // Reflection uses light permission
       movementWidget: 'canMove', // Movement uses canMove permission
       customWidget: 'textureWidget', // Custom widgets use texture permission (most common)

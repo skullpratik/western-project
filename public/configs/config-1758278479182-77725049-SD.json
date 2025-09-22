@@ -182,20 +182,14 @@
     {
       "type": "doorPresetWidget",
       "title": "Door Presets"
-    }
-  ],
-  "lights": [
+    },
     {
-      "name": "Point",
-      "defaultState": "off",
-      "intensity": 9.0,
-      "glowMeshes": [
-        "Cylinder.002"
-      ],
-      "glowIntensity": 0.5,
-      "glowColor": "#ffffff"
+      "type": "screenshotWidget",
+      "title": "Screenshot"
     }
   ],
+ 
+  
  
   "presets": {
     "doorSelections": {

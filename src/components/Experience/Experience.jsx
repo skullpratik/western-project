@@ -1256,35 +1256,97 @@ export function Experience({
       toggleAllLights,
       applyGlowToMeshes,
       removeGlowFromMeshes,
-  hasLights: !!((config.lights && config.lights.length > 0) || (config.metadata?.lights && config.metadata.lights.length > 0)),
+      hasLights: !!((config.lights && config.lights.length > 0) || (config.metadata?.lights && config.metadata.lights.length > 0)),
       lights: lights.reduce((acc, l) => ((acc[l.name] = l.isOn), acc), {}),
       logInteraction, // Expose logging function to other components
-      
-      // Model positioning functions
-      autoFitModel: (options = {}) => {
-        if (modelGroupRef.current) {
-          console.log('🎯 Auto-fitting model...');
-          const result = autoFitModel(modelGroupRef.current, camera, orbitControlsRef.current, {
-            centerModel: true,
-            centerY: false,
-            updateCamera: true,
-            fov: camera.fov || 50,
-            margin: 1.5,
-            ...options
-          });
-          
-          // Update current transform state
-          const newTransform = {
-            position: modelGroupRef.current.position.toArray(),
-            rotation: modelGroupRef.current.rotation.toArray(),
-            scale: modelGroupRef.current.scale.x // Assuming uniform scale
-          };
-          setCurrentModelTransform(newTransform);
-          
-          console.log('✅ Model auto-fitted:', result);
-          return result;
+
+      // Screenshot functionality for ScreenshotWidget
+      takeScreenshot: async () => {
+        try {
+          // Store original settings
+          const originalPosition = camera.position.clone();
+          const originalTarget = orbitControlsRef.current?.target?.clone();
+          const originalSize = { width: gl.domElement.width, height: gl.domElement.height };
+          const originalPixelRatio = gl.getPixelRatio();
+
+          // Calculate optimal camera position for the model
+          let optimalCameraPos = [3, 2, 5]; // Default fallback
+          let optimalTarget = [0, 1, 0];
+
+          if (modelGroupRef.current) {
+            try {
+              // Calculate the model's bounding box
+              const box = new THREE.Box3().setFromObject(modelGroupRef.current);
+              const center = box.getCenter(new THREE.Vector3());
+              const size = box.getSize(new THREE.Vector3());
+              const maxDim = Math.max(size.x, size.y, size.z);
+              const distance = maxDim * 2.2;
+              optimalCameraPos = [
+                center.x + distance * 0.6,
+                center.y + distance * 0.4,
+                center.z + distance * 0.6
+              ];
+              optimalTarget = [center.x, center.y, center.z];
+            } catch (error) {
+              // fallback to defaults
+            }
+          }
+
+          // Set optimal camera position
+          camera.position.set(...optimalCameraPos);
+          if (orbitControlsRef.current) {
+            orbitControlsRef.current.target.set(...optimalTarget);
+            orbitControlsRef.current.update();
+          }
+
+          // Increase canvas resolution for high-quality screenshot
+          const scaleFactor = Math.min(3, window.devicePixelRatio || 1);
+          const newWidth = Math.floor(originalSize.width * scaleFactor);
+          const newHeight = Math.floor(originalSize.height * scaleFactor);
+          gl.setSize(newWidth, newHeight, false);
+          gl.setPixelRatio(scaleFactor);
+          camera.aspect = newWidth / newHeight;
+          camera.updateProjectionMatrix();
+
+          // Render for stability
+          gl.render(r3fScene, camera);
+          await new Promise(resolve => setTimeout(resolve, 150));
+          gl.render(r3fScene, camera);
+          await new Promise(resolve => setTimeout(resolve, 50));
+          gl.render(r3fScene, camera);
+
+          // Capture the high-resolution screenshot
+          const canvas = gl.domElement;
+          const dataURL = canvas.toDataURL('image/png', 1.0);
+
+          // Restore original settings
+          gl.setSize(originalSize.width, originalSize.height, false);
+          gl.setPixelRatio(originalPixelRatio);
+          camera.aspect = originalSize.width / originalSize.height;
+          camera.updateProjectionMatrix();
+          camera.position.copy(originalPosition);
+          if (orbitControlsRef.current && originalTarget) {
+            orbitControlsRef.current.target.copy(originalTarget);
+            orbitControlsRef.current.update();
+          }
+          gl.render(r3fScene, camera);
+
+          // Download
+          if (dataURL && dataURL.length > 1000) {
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = `${modelName}_3d_model_${new Date().toISOString().split('T')[0]}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return true;
+          } else {
+            throw new Error('Screenshot data invalid');
+          }
+        } catch (error) {
+          console.error('❌ Screenshot failed:', error);
+          return false;
         }
-        return null;
       },
       
       updateModelTransform: (transform) => {

@@ -92,7 +92,8 @@
           { "name": "Glass Clear", "path": "/textures/clear_glass.jpg" }
         ]
       }
-    }
+    },
+    { "type": "screenshotWidget", "title": "Screenshot" }
   ],
   "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 }
 }
