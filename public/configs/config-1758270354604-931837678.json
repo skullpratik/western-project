@@ -41,29 +41,5 @@
     "resolution": 512,
     "color": "#000000"
   }
-  ,
-  "presets": [
-    {
-      "id": "coke",
-      "label": "Coke Look",
-      "buttonColor": "#e41b17",
-      "buttonTextColor": "#ffffff",
-      "actions": [
-        { "part": "CanBody", "texture": "/public/texture/pepsicanopy.jpg", "mapping": { "repeat": { "x": 1, "y": 1 } } },
-        { "part": "Logo", "tintColor": "#ffffff" },
-        { "part": "Door1", "tintColor": "#b30000" }
-      ]
-    },
-    {
-      "id": "pepsi",
-      "label": "Pepsi Look",
-      "buttonColor": "#0057b8",
-      "buttonTextColor": "#ffffff",
-      "actions": [
-        { "part": "CanBody", "texture": "/public/texture/pepsicanopy.jpg", "mapping": { "repeat": { "x": 1, "y": 1 } } },
-        { "part": "Logo", "tintColor": "#ffffff" },
-        { "part": "Door2", "tintColor": "#003b7d" }
-      ]
-    }
-  ]
+  
 }
