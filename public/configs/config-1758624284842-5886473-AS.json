@@ -1,11 +1,11 @@
 {
-  "name": "Under",
-  "path": "/models/base-1758535608624-596715035.glb",
+  "name": "AS",
+  "path": "/models/base-1758624284722-211742833.glb",
   "assets": {
-    "base": "/models/base-1758535608624-596715035.glb",
-    "doors": "/models/doors-1758535608730-273863849.glb",
-    "drawers": "/models/drawers-1758535608739-262287690.glb",
-    "glassDoors": "/models/glassDoors-1758535608934-887013662.glb"
+    "base": "/models/base-1758624284722-211742833.glb",
+    "doors": "/models/doors-1758624284753-137745879.glb",
+    "drawers": "/models/drawers-1758624284758-141298913.glb",
+    "glassDoors": "/models/glassDoors-1758624284813-56941991.glb"
   },
   "modelPosition": [
     0,

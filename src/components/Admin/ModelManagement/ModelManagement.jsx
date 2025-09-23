@@ -15,9 +15,10 @@ const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
 
   return (
     <div className={`model-card ${open ? 'expanded' : ''}`}>
+      {config.configUrl && config.configUrl.startsWith('http') && null}
       <div className="model-card-header" onClick={() => setOpen(o => !o)}>
         <div>
-          <h3>{modelName}</h3>
+          <h3>{modelName} {config.section ? <span className="section-badge">{config.section}</span> : null}</h3>
           <span className="model-path">{config.path || config.assets?.base}</span>
         </div>
         <div className="card-actions">
@@ -100,10 +101,14 @@ const ModelManagement = () => {
   const [editModel, setEditModel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Default to showing all sections
+  const [selectedSection, setSelectedSection] = useState('(All)');
   
   // Delete confirmation modal state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null); // {id, name}
+  // Track per-model section edits in the debug panel
+  const [sectionEdits, setSectionEdits] = useState({});
 
   // Fetch models from database
   useEffect(() => {
@@ -143,6 +148,7 @@ const ModelManagement = () => {
         id: model._id,
         path: `${API_BASE_URL}/models/${model.file}`,
         displayName: model.displayName,
+        section: typeof model.section === 'string' ? model.section.trim() : model.section,
         type: model.type,
         configUrl: model.configUrl,
         interactionGroups: model.interactionGroups || [],
@@ -162,14 +168,39 @@ const ModelManagement = () => {
     return formatted;
   }, [dbModels]);
 
-  const allModels = { ...dbModelsFormatted }; // Only use database models
-  const modelEntries = Object.entries(allModels);
+  // Derive section options from DB models
+  const sectionOptions = useMemo(() => {
+    // default known sections (always include these as helpful options)
+    const defaultSections = ['Upright Counter', 'Visicooler', 'XYZ'];
+    const s = new Set(defaultSections);
+    dbModels.forEach(m => {
+      if (m.section && typeof m.section === 'string' && m.section.trim()) s.add(m.section.trim());
+    });
+    // Keep stable ordering: defaults first, then any additional DB-only sections
+    const merged = Array.from(s);
+    return ['(All)', ...merged];
+  }, [dbModels]);
 
-  const handleAddModel = async (modelData) => {
+  const allModels = { ...dbModelsFormatted }; // Only use database models
+  let modelEntries = Object.entries(allModels);
+  if (selectedSection && selectedSection !== '(All)') {
+    const needle = (selectedSection || '').toString().trim().toLowerCase();
+    modelEntries = modelEntries.filter(([name, cfg]) => {
+      const sectionVal = (cfg.section || '').toString().trim().toLowerCase();
+      const displayNameVal = (cfg.displayName || name || '').toString().trim().toLowerCase();
+      const nameVal = (name || '').toString().trim().toLowerCase();
+      return (
+        sectionVal === needle ||
+        sectionVal.includes(needle) ||
+        displayNameVal.includes(needle) ||
+        nameVal.includes(needle)
+      );
+    });
+  }
+  // Refresh models after an add; used as onAdd handler for modals
+  const handleAddModel = async () => {
     try {
       setLoading(true);
-      
-      // Refresh the models list after successful upload
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/api/admin/models`, {
         headers: {
@@ -177,25 +208,17 @@ const ModelManagement = () => {
           'Content-Type': 'application/json'
         }
       });
-
       if (response.ok) {
         const models = await response.json();
         setDbModels(models);
-        
-        // Preload the new model
+        // Preload the newest model file if present
         const newModel = models[models.length - 1];
-        if (newModel) {
-          try {
-            useGLTF.preload(`${API_BASE_URL}/models/${newModel.file}`);
-          } catch(e) {
-            console.warn('Failed to preload model:', e);
-          }
+        if (newModel && newModel.file) {
+          try { useGLTF.preload(`${API_BASE_URL}/models/${newModel.file}`); } catch (e) { console.warn('Failed to preload model:', e); }
         }
-        
-        // Fire event so MainApp can refresh
+        // Notify other parts of app
         window.dispatchEvent(new Event('modelsUpdated'));
       }
-      
       setShowAdd(false);
     } catch (err) {
       console.error('Error refreshing models after add:', err);
@@ -203,6 +226,8 @@ const ModelManagement = () => {
       setLoading(false);
     }
   };
+
+  
 
   // Called after editing an existing model to refresh the list
   const handleUpdateModel = async () => {
@@ -339,10 +364,18 @@ const ModelManagement = () => {
         <h1>Model Management</h1>
         <p>Overview of all 3D models configured in the application.</p>
       </div>
-      <div className="toolbar-row" style={{display:'flex', gap:8}}>
+      <div className="toolbar-row" style={{display:'flex', gap:8, alignItems: 'center'}}>
         <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model (Simple)</button>
-        {/* Multi-asset upload now opened from the Simple modal's "Upload multiple" button to avoid duplicate flows */}
+        <div style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <label style={{ fontSize: 13, marginRight: 8 }}>Section:</label>
+          <select value={selectedSection || '(All)'} onChange={(e) => setSelectedSection(e.target.value)} style={{ padding: 6, borderRadius: 6 }}>
+            {sectionOptions.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </div>
       </div>
+      
       <div className="models-grid">
         {modelEntries.map(([modelName, config]) => (
           <ModelCard 

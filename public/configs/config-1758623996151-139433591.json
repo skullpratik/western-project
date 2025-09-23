@@ -101,7 +101,6 @@
     "scale": 8,
     "blur": 2.5,
     "far": 4.5,
-    "resolution": 512,
-    "color": "#000000"
+    "resolution": 512
   }
 }

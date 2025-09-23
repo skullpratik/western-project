@@ -10,6 +10,7 @@ export default function AddModelModalSimple({ onClose, onAdd, editModel = null, 
   const [name, setName] = useState(editModel?.name || '');
   const [modelPath, setModelPath] = useState(editModel?.file || editModel?.path || '');
   const [configUrl, setConfigUrl] = useState(editModel?.configUrl || '');
+  const [section, setSection] = useState(editModel?.section || 'Upright Counter');
   // Fetch config JSON if editing and configUrl is present
   useEffect(() => {
     if (isEditMode && configUrl && configUrl.endsWith('.json')) {
@@ -361,6 +362,8 @@ export default function AddModelModalSimple({ onClose, onAdd, editModel = null, 
         file: modelPath,
         configUrl
       };
+      // Include section when saving (supports edit/create)
+      if (section) modelData.section = section;
       if (Object.keys(assetsObj).length > 0) {
         modelData.assets = assetsObj;
       }
@@ -419,6 +422,14 @@ export default function AddModelModalSimple({ onClose, onAdd, editModel = null, 
           <label>
             <span>Name</span>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Model name" />
+          </label>
+          <label>
+            <span>Section</span>
+            <select value={section} onChange={(e) => setSection(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
+              <option value="Upright Counter">Upright Counter</option>
+              <option value="Visicooler">Visicooler</option>
+              <option value="XYZ">XYZ</option>
+            </select>
           </label>
           <label>
             <span>Model File</span>

@@ -11,6 +11,7 @@ export default function AddModelModalMultiAsset({ onClose, onAdd }) {
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [type, setType] = useState('cabinet');
+  const [section, setSection] = useState('Upright Counter');
   const [interactionGroups, setInteractionGroups] = useState('');
   const [metadata, setMetadata] = useState('');
 
@@ -93,6 +94,8 @@ export default function AddModelModalMultiAsset({ onClose, onAdd }) {
       formData.append('name', name);
       formData.append('displayName', displayName || name);
       formData.append('type', type);
+  // Section (category) for the model
+  if (section) formData.append('section', section);
 
       if (interactionGroups.trim()) {
         formData.append('interactionGroups', interactionGroups);
@@ -221,6 +224,17 @@ export default function AddModelModalMultiAsset({ onClose, onAdd }) {
               <option value="refrigerator">Refrigerator</option>
               <option value="freezer">Freezer</option>
               <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
+              Section
+            </label>
+            <select value={section} onChange={(e) => setSection(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}>
+              <option value="Upright Counter">Upright Counter</option>
+              <option value="Visicooler">Visicooler</option>
+              <option value="XYZ">XYZ</option>
             </select>
           </div>
 
@@ -361,7 +375,7 @@ export default function AddModelModalMultiAsset({ onClose, onAdd }) {
           </div>
         )}
 
-        <style jsx>{`
+        <style>{`
           .modal-overlay {
             position: fixed;
             top: 0;
