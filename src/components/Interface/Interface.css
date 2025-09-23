@@ -85,7 +85,7 @@
 
 .toolbar-center { flex: 1; display: flex; justify-content: flex-start; }
 .toolbar-center.left { justify-content: flex-start; }
-.toolbar-right { display: flex; align-items: center; gap: 10px; }
+.toolbar-right { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 
 .interface-toolbar.compact { gap: 16px; }
 
@@ -104,7 +104,8 @@
 }
 
 .toolbar-select.enhanced {
-  min-width: 170px;
+  min-width: 120px;
+  flex: 0 1 140px; /* allow shrinking on smaller screens */
   padding: 6px 38px 6px 12px;
   height: 34px;
   line-height: 20px;

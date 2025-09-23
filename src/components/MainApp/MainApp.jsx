@@ -123,6 +123,8 @@ function MainApp() {
         type: model.type,
         // Include assets from database if they exist
         ...(model.assets && { assets: model.assets }),
+        // include section provided by admin
+        ...(model.section && { section: model.section }),
       };
       formatted[model.name] = { ...baseModelFields, __configUrl: configUrl };
     });
@@ -173,6 +175,8 @@ function MainApp() {
         if (!hasAssetsBase && !combined.path && base.path) {
           combined.path = base.path;
         }
+        // preserve section from DB if external config doesn't define it
+        combined.section = combined.section || base.section;
         merged[name] = combined;
         console.log('[MergedModel] Using external config for', name, combined);
       } else {
@@ -183,6 +187,41 @@ function MainApp() {
     });
     return merged;
   }, [dbModelsFormatted, externalConfigs, normalizeModelUrls]);
+
+  // Section filter for user UI
+  const [selectedSection, setSelectedSection] = useState(() => '(All)');
+  const sectionOptions = useMemo(() => {
+    const defaults = ['Upright Counter', 'Visicooler'];
+    const fromDb = Array.from(new Set(dbModels.map(m => (m.section || 'Upright Counter'))));
+    const merged = Array.from(new Set([...defaults, ...fromDb]));
+    return ['(All)', ...merged.sort()];
+  }, [dbModels]);
+
+  const filteredModels = useMemo(() => {
+    if (!selectedSection || selectedSection === '(All)') return mergedModels;
+    const want = String(selectedSection).trim().toLowerCase();
+    const out = {};
+    Object.entries(mergedModels).forEach(([name, cfg]) => {
+      const sec = String(cfg?.section || '').trim().toLowerCase();
+      if (sec === want) out[name] = cfg;
+    });
+    return out;
+  }, [mergedModels, selectedSection]);
+
+  // When section changes, ensure the selected model is valid for that section.
+  // If the current selection is not in the filtered set, auto-select the first
+  // available model so the Experience component reloads the appropriate scene.
+  useEffect(() => {
+    const keys = Object.keys(filteredModels);
+    if (!keys.length) return; // nothing to select for this section
+
+    if (!filteredModels[selectedModel]) {
+      const next = keys[0];
+      setSelectedModel(next);
+      try { localStorage.setItem('selectedModel', next); } catch(_) {}
+      console.log('🔁 Section change auto-selected model:', next);
+    }
+  }, [selectedSection, filteredModels]);
 
   const [selectedModel, setSelectedModel] = useState(() => {
     const saved = localStorage.getItem('selectedModel');
@@ -301,6 +340,7 @@ function MainApp() {
             }}
           >
             <Experience
+              key={`${selectedModel}-${currentModel?.path || ''}`}
               modelName={selectedModel}
               modelConfig={currentModel}
               allModels={mergedModels}
@@ -323,7 +363,10 @@ function MainApp() {
           api={api}
           applyRequest={applyRequest}
           userPermissions={userPermissions}
-          models={mergedModels}
+          models={filteredModels}
+          sectionOptions={sectionOptions}
+          selectedSection={selectedSection}
+          onSectionChange={setSelectedSection}
         />
       </div>
 

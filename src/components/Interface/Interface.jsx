@@ -15,6 +15,11 @@ export function Interface({
   applyRequest,
   userPermissions,
   models = {}, // merged models map passed from MainApp
+  // Section filtering props (passed from MainApp). Provide safe defaults so
+  // the component works standalone during development or in older builds.
+  sectionOptions = ['(All)'],
+  selectedSection = '(All)',
+  onSectionChange = () => {},
 }) {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showConfigsList, setShowConfigsList] = useState(false);
@@ -318,20 +323,96 @@ export function Interface({
 
   // No permissions message
   if (!userPermissions || Object.keys(userPermissions).length === 0) {
+    const renderToolbar = () => (
+      <div className="interface-toolbar compact">
+        <div className="toolbar-center left">
+          <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+            <select
+              id="modelSelect"
+              aria-label="Select Model"
+              className="toolbar-select enhanced"
+              value={selectedModel}
+              onChange={(e) => onModelChange?.(e.target.value)}
+            >
+              {Object.keys(models).map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            {Array.isArray(sectionOptions) && (
+              <select
+                id="sectionSelect"
+                aria-label="Filter by section"
+                className="toolbar-select enhanced"
+                value={selectedSection}
+                onChange={(e) => onSectionChange?.(e.target.value)}
+              >
+                {sectionOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+        <div className="toolbar-right">
+          {userName && <span className="user-label" title={userName}>{userName}</span>}
+          {onLogout && (
+            <button className="toolbar-logout" onClick={onLogout} title="Logout">Logout</button>
+          )}
+        </div>
+      </div>
+    );
+
     return (
-      <div className="no-permissions">
-        <h3>🔒 Access Required</h3>
-        <p>You need appropriate permissions to use the configuration tools.</p>
+      <div className="interface-container">
+        {renderToolbar()}
+        <div className="no-permissions">
+          <h3>🔒 Access Required</h3>
+          <p>You need appropriate permissions to use the configuration tools.</p>
+        </div>
       </div>
     );
   }
 
   // No widgets configured or no permissions for any widgets
   if (!widgets.length && !hasPermission('saveConfig')) {
+    const renderToolbar = () => (
+      <div className="interface-toolbar compact">
+        <div className="toolbar-center left">
+          <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+            <select
+              id="modelSelect"
+              aria-label="Select Model"
+              className="toolbar-select enhanced"
+              value={selectedModel}
+              onChange={(e) => onModelChange?.(e.target.value)}
+            >
+              {Object.keys(models).map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            {Array.isArray(sectionOptions) && (
+              <select
+                id="sectionSelect"
+                aria-label="Filter by section"
+                className="toolbar-select enhanced"
+                value={selectedSection}
+                onChange={(e) => onSectionChange?.(e.target.value)}
+              >
+                {sectionOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+        <div className="toolbar-right">
+          {userName && <span className="user-label" title={userName}>{userName}</span>}
+          {onLogout && (
+            <button className="toolbar-logout" onClick={onLogout} title="Logout">Logout</button>
+          )}
+        </div>
+      </div>
+    );
+
     return (
-      <div className="no-permissions">
-        <h3>⚙️ No Configuration Available</h3>
-        <p>You don't have permission to access configuration tools for this model.</p>
+      <div className="interface-container">
+        {renderToolbar()}
+        <div className="no-permissions">
+          <h3>⚙️ No Configuration Available</h3>
+          <p>You don't have permission to access configuration tools for this model.</p>
+        </div>
       </div>
     );
   }
@@ -340,15 +421,29 @@ export function Interface({
     <div className="interface-container">
       <div className="interface-toolbar compact">
         <div className="toolbar-center left">
-          <select
-            id="modelSelect"
-            aria-label="Select Model"
-            className="toolbar-select enhanced"
-            value={selectedModel}
-            onChange={(e) => onModelChange?.(e.target.value)}
-          >
-            {Object.keys(models).map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+            <select
+              id="modelSelect"
+              aria-label="Select Model"
+              className="toolbar-select enhanced"
+              value={selectedModel}
+              onChange={(e) => onModelChange?.(e.target.value)}
+            >
+              {Object.keys(models).map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            {/* Section filter (optional) */}
+            {Array.isArray(sectionOptions) && (
+              <select
+                id="sectionSelect"
+                aria-label="Filter by section"
+                className="toolbar-select enhanced"
+                value={selectedSection}
+                onChange={(e) => onSectionChange?.(e.target.value)}
+              >
+                {sectionOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            )}
+          </div>
         </div>
         <div className="toolbar-right">
           {userName && <span className="user-label" title={userName}>{userName}</span>}
@@ -399,7 +494,7 @@ export function Interface({
         <div className="model-info">
           <div className="info-item">
             <span className="info-label">Model:</span>
-            <span className="info-value">{selectedModel}</span>
+              <span className="info-value">{selectedModel} {models[selectedModel]?.section ? <span className="section-badge">{models[selectedModel].section}</span> : null}</span>
           </div>
           <div className="info-item">
             <span className="info-label">Widgets:</span>
