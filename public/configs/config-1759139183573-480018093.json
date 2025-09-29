@@ -1,0 +1,45 @@
+{
+ 
+  "hideDoorsByDefault": false,
+  "lights": [
+    {
+      "name": "Spot",
+      "defaultState": "off",
+      "intensity": 9.0
+    }
+  ],
+  "interactionGroups": [
+    {
+      "type": "doors",
+      "label": "Door",
+      "parts": [
+        { "name": "Door2", "rotationAxis": "y", "openAngle": -90 },
+        { "name": "Door3", "rotationAxis": "y", "openAngle": 90 },
+        { "name": "Door1", "rotationAxis": "y", "openAngle": 90 }
+      ]
+    },
+    {
+      "type": "toggles",
+      "label": "Point",
+      "parts": [
+        { "name": "Spot", "label": "LED Light" }
+      ]
+    }
+  ],
+  "uiWidgets": [
+    { "type": "lightWidget", "title": "Light Control" },
+    { "type": "screenshotWidget", "title": "Screenshot" },
+    { "type": "globalTextureWidget", "title": "Global Textures" }
+  ],
+  "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 },
+  "shadows": {
+    "enabled": true,
+    "position": [0, -2, 0],
+    "opacity": 0.4,
+    "scale": 8,
+    "blur": 2.5,
+    "far": 4.5,
+    "resolution": 512,
+    "color": "#000000"
+    }
+  }

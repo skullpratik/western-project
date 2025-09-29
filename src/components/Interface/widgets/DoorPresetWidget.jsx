@@ -113,3 +113,5 @@ export function DoorPresetWidget({ config, api }) {
     </div>
   );
 }
+
+export default React.memo(DoorPresetWidget);

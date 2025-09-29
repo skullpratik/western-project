@@ -1,6 +1,7 @@
 // src/components/widgets/TextureWidget.jsx
 import React, { useState } from "react";
 import "../Interface.css";
+import { dlog } from '../../../utils/logger';
 
 export const TextureWidget = ({ config, applyRequest }) => {
   const widget = config?.uiWidgets?.find((w) => w.type === "textureWidget");
@@ -48,7 +49,7 @@ export const TextureWidget = ({ config, applyRequest }) => {
     }
 
     // Send the texture source and mapping config to Experience
-    console.log('🔔 TextureWidget: handleApply called', { selectedPart, textureSourceType: (textureSource instanceof File) ? 'File' : typeof textureSource, hasApplyRequest: !!applyRequest?.current });
+  dlog('🔔 TextureWidget: handleApply called', { selectedPart, textureSourceType: (textureSource instanceof File) ? 'File' : typeof textureSource, hasApplyRequest: !!applyRequest?.current });
     if (!applyRequest?.current || typeof applyRequest.current !== "function") {
       console.warn("⚠️ applyRequest ref not provided from App.jsx");
       return;
@@ -74,7 +75,7 @@ export const TextureWidget = ({ config, applyRequest }) => {
 
       // Log combined result
       Promise.all(promises)
-        .then(() => console.log(`✅ Texture applied to grouped targets for ${selectedPart}`))
+        .then(() => dlog(`✅ Texture applied to grouped targets for ${selectedPart}`))
         .catch(err => console.error(`❌ Error applying grouped texture for ${selectedPart}:`, err));
 
       return;
@@ -86,9 +87,9 @@ export const TextureWidget = ({ config, applyRequest }) => {
       const res = applyRequest.current(selectedPart, textureSource, { ...partConfig.mapping, persist: false });
       // If it returns a promise, log completion
       if (res && typeof res.then === 'function') {
-        res.then(() => console.log(`✅ Texture request completed for ${selectedPart}`)).catch(err => console.error(`❌ Texture request error for ${selectedPart}:`, err));
+        res.then(() => dlog(`✅ Texture request completed for ${selectedPart}`)).catch(err => console.error(`❌ Texture request error for ${selectedPart}:`, err));
       } else {
-        console.log(`✅ Texture request invoked for ${selectedPart}`);
+        dlog(`✅ Texture request invoked for ${selectedPart}`);
       }
     } catch (err) {
       console.error('❌ TextureWidget: exception calling applyRequest.current', err);
@@ -160,4 +161,4 @@ export const TextureWidget = ({ config, applyRequest }) => {
   );
 };
 
-export default TextureWidget;
+export default React.memo(TextureWidget);

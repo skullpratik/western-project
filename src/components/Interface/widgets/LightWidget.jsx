@@ -1,6 +1,7 @@
 // src/components/widgets/LightWidget.jsx
 import React from 'react';
 import "../Interface.css";
+import { dlog } from '../../../utils/logger';
 
 export const LightWidget = ({ config, api }) => {
   // Check both config.lights and config.metadata.lights - prioritize non-empty arrays
@@ -9,21 +10,21 @@ export const LightWidget = ({ config, api }) => {
 
   // Enhanced debug logging
   React.useEffect(() => {
-    console.log('💡 LightWidget Enhanced Debug:');
-    console.log('  - FULL config object:', config);
-    console.log('  - config.lights:', config.lights);
-    console.log('  - config.metadata.lights:', config.metadata?.lights);
-    console.log('  - MERGED lights result:', lights);
-    console.log('  - lights.length:', lights.length);
-    console.log('  - lights array type:', Array.isArray(lights));
+    dlog('💡 LightWidget Enhanced Debug:');
+    dlog('  - FULL config object:', config);
+    dlog('  - config.lights:', config.lights);
+    dlog('  - config.metadata.lights:', config.metadata?.lights);
+    dlog('  - MERGED lights result:', lights);
+    dlog('  - lights.length:', lights.length);
+    dlog('  - lights array type:', Array.isArray(lights));
     
     if (lights.length > 0) {
-      console.log('  - ✅ LIGHTS FOUND!');
+      dlog('  - ✅ LIGHTS FOUND!');
       lights.forEach((light, i) => {
-        console.log(`  - Light ${i}:`, light);
+        dlog(`  - Light ${i}:`, light);
       });
     } else {
-      console.log('  - ❌ NO LIGHTS FOUND anywhere');
+      dlog('  - ❌ NO LIGHTS FOUND anywhere');
     }
   }, [JSON.stringify(config)]); // Watch entire config object changes
 
@@ -137,4 +138,4 @@ export const LightWidget = ({ config, api }) => {
   );
 };
 
-export default LightWidget;
+export default React.memo(LightWidget);

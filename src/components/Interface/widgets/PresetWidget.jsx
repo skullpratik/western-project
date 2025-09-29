@@ -1,5 +1,6 @@
 import React from 'react';
 import '../Interface.css';
+import { dlog } from '../../../utils/logger';
 
 export const PresetWidget = ({ config, applyRequest, api }) => {
   const presets = Array.isArray(config.presets) ? config.presets : [];
@@ -35,7 +36,7 @@ export const PresetWidget = ({ config, applyRequest, api }) => {
           }
         }
       }
-      console.log(`✅ Preset applied: ${preset.id || preset.label}`);
+  dlog(`✅ Preset applied: ${preset.id || preset.label}`);
     } catch (err) {
       console.error('❌ Preset apply failed:', err);
     }
@@ -55,4 +56,4 @@ export const PresetWidget = ({ config, applyRequest, api }) => {
   );
 };
 
-export default PresetWidget;
+export default React.memo(PresetWidget);
