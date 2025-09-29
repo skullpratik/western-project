@@ -1,25 +1,19 @@
 {
  
   "hideDoorsByDefault": false,
-   "lights": [
+  "lights": [
     {
       "name": "Point",
       "defaultState": "off",
-      "intensity": 9.0,
-       "glowMeshes": [
-        "canopy"
-     ]
-      
+      "intensity": 9.0
     }
-     
-     
   ],
   "interactionGroups": [
     {
       "type": "doors",
       "label": "Door",
       "parts": [
-        { "name": "Door", "rotationAxis": "x", "openAngle": 90 }
+        { "name": "Door", "rotationAxis": "y", "openAngle": 90 }
       ]
     },
     {
@@ -49,10 +43,10 @@
             }
           },
           {
-            "name": "Sidepannel1",
+            "name": "SidepannelRight",
             "mapping": {
               "flipY": false,
-              "offset": { "x": 1.5, "y": 0 },
+              "offset": { "x": 1.65, "y": 0 },
               "center": { "x": 0.5, "y": 0.5 },
              
               "repeat": { "x": 3.2, "y": 0.9 },
@@ -61,7 +55,7 @@
             }
           },
           {
-            "name": "Sidepannel2",
+            "name": "SidepannelLeft",
             "mapping": {
               "flipY": false,
               "offset": { "x": 1.25, "y": 0 },
@@ -90,17 +84,7 @@
           { "name": "Glass Clear", "path": "/textures/clear_glass.jpg" }
         ]
       }
-    },
-    { "type": "screenshotWidget", "title": "Screenshot" }
+    }
   ],
-  "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 },
-  "shadows": {
-    "enabled": true,
-    "position": [0, -0.16, 0],
-    "opacity": 0.8,
-    "scale": 8,
-    "blur": 2.5,
-    "far": 4.5,
-    "resolution": 512
-  }
+  "camera": { "position": [0, 2.5, 7], "target": [0, 1, 0], "fov": 50 }
 }

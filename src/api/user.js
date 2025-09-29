@@ -94,3 +94,12 @@ export const getActivityStats = async () => {
     throw error;
   }
 };
+
+export const deleteActivityForUser = async (userId) => {
+  try {
+    const res = await api.delete(`/activity/clear/${userId}`);
+    return res.data;
+  } catch (error) {
+    throw error;
+  }
+};

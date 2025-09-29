@@ -99,55 +99,57 @@ export const TextureWidget = ({ config, applyRequest }) => {
     <div className="widget-container">
       <div className="widget-title">{widget.title || "🎨 Texture Widget"}</div>
 
-      {/* Part Selector */}
-      <div className="form-group">
-        <label className="form-label">Select Part</label>
-        <select 
-          className="interface-select"
-          value={selectedPart}
-          onChange={(e) => setSelectedPart(e.target.value)}
-        >
-          <option value="" disabled>Select Part</option>
-          {parts.map((part) => (
-            <option key={part.name} value={part.name}>
-              {part.name}
-            </option>
-          ))}
-        </select>
+      <div className="widget-content">
+        {/* Part Selector */}
+        <div className="form-group">
+          <label className="form-label">Select Part</label>
+          <select 
+            className="interface-select"
+            value={selectedPart}
+            onChange={(e) => setSelectedPart(e.target.value)}
+          >
+            <option value="" disabled>Select Part</option>
+            {parts.map((part) => (
+              <option key={part.name} value={part.name}>
+                {part.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Texture Selector */}
+        <div className="form-group">
+          <label className="form-label">Select Texture</label>
+          <select 
+            className="interface-select"
+            value={selectedTexture}
+            onChange={(e) => {
+              setSelectedTexture(e.target.value);
+              setUploadedFile(null);
+            }}
+          >
+            <option value="" disabled>Select Texture</option>
+            {textures.map((tex) => (
+              <option key={tex.path} value={tex.path}>
+                {tex.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Upload custom texture */}
+        <div className="form-group">
+          <label className="form-label">Upload Custom Texture</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleTextureUpload}
+            className="form-file-input"
+          />
+        </div>
       </div>
 
-      {/* Texture Selector */}
-      <div className="form-group">
-        <label className="form-label">Select Texture</label>
-        <select 
-          className="interface-select"
-          value={selectedTexture}
-          onChange={(e) => {
-            setSelectedTexture(e.target.value);
-            setUploadedFile(null);
-          }}
-        >
-          <option value="" disabled>Select Texture</option>
-          {textures.map((tex) => (
-            <option key={tex.path} value={tex.path}>
-              {tex.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Upload custom texture */}
-      <div className="form-group">
-        <label className="form-label">Upload Custom Texture</label>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleTextureUpload}
-          className="form-file-input"
-        />
-      </div>
-
-      {/* Apply button */}
+      {/* Apply button (kept outside scrollable content so it's always visible) */}
       <button
         className="interface-button btn-full-width"
         onClick={handleApply}

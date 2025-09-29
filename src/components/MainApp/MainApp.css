@@ -84,8 +84,9 @@
 
 /* Sidebar wrapper (Interface root uses fixed/flex basis but we ensure flex ratio) */
 .interface-container {
-  flex: 1 1 0 !important;
-  max-width: 480px;
+  /* Allow fixed-ish sidebar width to match Interface.css (520px) */
+  flex: 0 0 440px !important;
+  max-width: 440px;
   min-width: 300px;
   border-left: 1px solid #e5e7eb;
   background: #f8fafc;
@@ -113,7 +114,7 @@
 /* Prevent huge growth if viewport super wide */
 @media (min-width: 2000px) {
   .canvas-container { flex: 3 1 0; }
-  .interface-container { max-width: 520px; }
+  .interface-container { max-width: 620px; }
 }
 
 /* Medium breakpoint: keep split but reduce sidebar width */

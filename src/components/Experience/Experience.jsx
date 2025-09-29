@@ -1127,12 +1127,9 @@ export function Experience({
       console.log('❌ No camera config found in:', config);
     }
 
-    // Log model load
-    logInteraction("MODEL_LOADED", {
-      modelName: config.name || modelName,
-      hasLights: (config.lights && config.lights.length > 0) || (config.metadata?.lights && config.metadata.lights.length > 0),
-      interactiveParts: Array.isArray(interactionGroups) ? interactionGroups.reduce((count, group) => count + (group.parts?.length || 0), 0) : 0
-    });
+    // Previously we sent a MODEL_LOADED activity for every model mount which created
+    // excessive noise in the activity log. This client-side emission has been removed
+    // to avoid spamming the server. The server-side or admin-triggered logs remain.
   }, [mainScene, assetSceneKeys, modelName, config, camera, interactionGroups, logInteraction]);
 
   // init lights when objects ready

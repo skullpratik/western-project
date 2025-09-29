@@ -42,6 +42,7 @@ const AdminShell = () => {
     '/admin/dashboard': 'Dashboard',
     '/admin/users': 'User Management',
     '/admin/models': 'Model Management',
+  // '/admin/activity-log': 'Activity Logs',
   // '/admin/models/generator': 'Model Generator',
     '/admin/user-preview': 'User-Preview'
   };
@@ -68,6 +69,7 @@ const AdminShell = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/models" element={<ModelManagement />} />
+            {/* Activity Log route removed; view per-user via User Management */}
             {/* Model Generator removed */}
             <Route path="/user-preview" element={<UserPreview />} />
           </Routes>

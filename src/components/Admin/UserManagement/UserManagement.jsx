@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './UserManagement.css';
+import { ActivityLog } from '../../ActivityLog/ActivityLog';
 
 const API_BASE_URL = 'http://localhost:5000';
 
@@ -9,6 +10,8 @@ const UserManagement = () => {
   const [error, setError] = useState('');
   const [editingUser, setEditingUser] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [activityUserId, setActivityUserId] = useState(null);
 
   useEffect(() => {
     fetchUsers();
@@ -218,6 +221,7 @@ const UserManagement = () => {
           <div className="flex gap-12" style={{fontSize:12}}>
             <span className="badge primary">Total {users.length}</span>
             <span className="badge">Active {users.filter(u => u.isActive).length}</span>
+            {/* Per-user delete available inside the ActivityLog modal */}
           </div>
         </div>
       </div>
@@ -264,6 +268,7 @@ const UserManagement = () => {
                 <td>
                   <div className="kt-actions">
                     <button onClick={() => handleEditUser(user)}>Edit</button>
+                    <button onClick={() => { setActivityUserId(user._id); setShowActivityModal(true); }}>View Activity</button>
                     <button onClick={() => handleDeleteUser(user._id)}>Delete</button>
                   </div>
                 </td>
@@ -353,6 +358,20 @@ const UserManagement = () => {
                 <button type="submit" className="kt-btn primary">Update User</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {showActivityModal && activityUserId && (
+        <div className="modal-overlay" style={{position:'fixed', inset:0, background:'rgba(15,23,42,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'60px 20px', zIndex:200}}>
+          <div className="kt-card" style={{width:'min(920px,100%)', maxHeight:'80vh', overflow:'auto'}}>
+            <div className="flex" style={{justifyContent:'space-between', alignItems:'center'}}>
+              <div className="kt-card-header" style={{marginBottom:0}}>Activity for user</div>
+              <button onClick={() => { setShowActivityModal(false); setActivityUserId(null); }} style={{border:'none', background:'transparent', fontSize:24, lineHeight:1, cursor:'pointer'}}>×</button>
+            </div>
+            <div style={{marginTop:12}}>
+              {/* ActivityLog component accepts userId prop */}
+              <ActivityLog userId={activityUserId} />
+            </div>
           </div>
         </div>
       )}

@@ -1,24 +1,34 @@
 import React, { useState, useEffect } from "react";
-import { getActivityLogs, getActivityStats } from "../../api/user";
+import { getActivityLogs, deleteActivityForUser } from "../../api/user";
+import { useAuth } from '../../context/AuthContext';
 
-export function ActivityLog({ user }) {
+export function ActivityLog({ user: propUser, userId: propUserId = null, onClose, ...props }) {
+  // Prefer an explicitly passed `user` prop, otherwise fall back to AuthContext.
+  const { user: ctxUser } = useAuth() || {};
+  const user = propUser || ctxUser || {};
   const [logs, setLogs] = useState([]);
-  const [stats, setStats] = useState(null);
+  // Stats removed per request — we no longer display aggregate action stats here
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState({});
+  const [selectedUserId, setSelectedUserId] = useState(propUserId);
 
   useEffect(() => {
-    fetchLogs();
-    fetchStats();
-  }, [page, filters]);
+    // Include selectedUserId into filters for fetching logs
+    const combinedFilters = { ...filters };
+    if (selectedUserId) combinedFilters.userId = selectedUserId;
+    fetchLogs(combinedFilters);
+  }, [page, filters, selectedUserId]);
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (overrideFilters = {}) => {
     try {
       setLoading(true);
-      const response = await getActivityLogs({ ...filters, page, limit: 15 });
-      setLogs(response.logs);
+      const query = { ...filters, ...overrideFilters, page, limit: 15 };
+      const response = await getActivityLogs(query);
+      // Filter out noisy client-side MODEL_LOADED events from display
+      const filtered = (response.logs || []).filter((l) => l.action !== 'MODEL_LOADED');
+      setLogs(filtered);
       setTotalPages(response.totalPages);
     } catch (error) {
       console.error("Error fetching activity logs:", error);
@@ -27,14 +37,7 @@ export function ActivityLog({ user }) {
     }
   };
 
-  const fetchStats = async () => {
-    try {
-      const response = await getActivityStats();
-      setStats(response);
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    }
-  };
+  // fetchStats removed — component no longer shows aggregate stats
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -71,26 +74,42 @@ export function ActivityLog({ user }) {
 
   return (
     <div className="activity-log-container">
-      <div className="activity-header">
-        <h2>Activity History</h2>
-        {user.role === "admin" && (
-          <span className="user-role-badge">Admin View</span>
+      <div className="activity-header" style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
+        <div style={{display:'flex', alignItems:'center', gap:12}}>
+          <h2>Activity History</h2>
+          {user.role === "admin" && (
+            <span className="user-role-badge">Admin View</span>
+          )}
+        </div>
+        {/* If viewing a specific user's activity, allow admin to delete those logs */}
+        {user.role === 'admin' && selectedUserId && (
+          <div>
+            <button className="kt-btn danger sm" onClick={async () => {
+              if (!window.confirm('Permanently delete all activity logs for this user?')) return;
+              try {
+                const json = await deleteActivityForUser(selectedUserId);
+                alert(`Deleted ${json.deletedCount} activity logs for user`);
+                // Refresh list
+                setSelectedUserId(null);
+                fetchLogs();
+              } catch (err) {
+                // Enhanced debugging output
+                console.error('Error deleting user activity logs:', err);
+                if (err.response) {
+                  console.error('Response status:', err.response.status);
+                  console.error('Response data:', err.response.data);
+                  alert(`Failed to delete logs: ${err.response.status} - ${JSON.stringify(err.response.data)}`);
+                } else {
+                  alert(`Failed to delete logs: ${err.message}`);
+                }
+              }
+            }}>Delete logs for this user</button>
+          </div>
         )}
       </div>
 
       {/* Stats Overview */}
-      {stats && (
-        <div className="activity-stats">
-          <div className="stat-card">
-            <h3>{stats.totalActions}</h3>
-            <p>Total Actions (30 days)</p>
-          </div>
-          <div className="stat-card">
-            <h3>{stats.popularActions[0]?.count || 0}</h3>
-            <p>{stats.popularActions[0]?._id || "No data"}</p>
-          </div>
-        </div>
-      )}
+      {/* Stats intentionally removed per admin request */}
 
       {/* Filters - Only for admin */}
       {user.role === "admin" && (
@@ -126,7 +145,7 @@ export function ActivityLog({ user }) {
             
             <div className="activity-details">
               <div className="user-info">
-                <strong>{log.userName}</strong>
+                <strong className="user-clickable" onClick={() => setSelectedUserId(log.userId)} style={{cursor:'pointer', textDecoration:'underline'}}>{log.userName}</strong>
                 <span className="user-email">{log.userEmail}</span>
                 {user.role === "admin" && (
                   <span className="ip-address">IP: {log.ipAddress}</span>

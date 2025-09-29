@@ -461,7 +461,7 @@ export function Interface({
 
       {/* Configuration Manager */}
       {hasPermission('canEdit') && (
-        <div className="widget-container save-config-widget">
+        <div className="widget-container widget-full save-config-widget">
           <h4 className="widget-title">💾 Configuration Manager</h4>
           
           <div className="config-buttons">
