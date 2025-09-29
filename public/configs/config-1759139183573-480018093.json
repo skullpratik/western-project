@@ -1,13 +1,7 @@
 {
  
   "hideDoorsByDefault": false,
-  "lights": [
-    {
-      "name": "Spot",
-      "defaultState": "off",
-      "intensity": 9.0
-    }
-  ],
+  
   "interactionGroups": [
     {
       "type": "doors",
@@ -27,7 +21,7 @@
     }
   ],
   "uiWidgets": [
-    { "type": "lightWidget", "title": "Light Control" },
+    
     { "type": "screenshotWidget", "title": "Screenshot" },
     { "type": "globalTextureWidget", "title": "Global Textures" }
   ],

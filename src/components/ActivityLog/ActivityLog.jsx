@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { getActivityLogs, deleteActivityForUser } from "../../api/user";
+import { getActivityLogs, deleteActivityForUser, getUserConfigs, deleteUserConfig } from "../../api/user";
 import { useAuth } from '../../context/AuthContext';
+import './ActivityLog.css';
 
 export function ActivityLog({ user: propUser, userId: propUserId = null, onClose, ...props }) {
   // Prefer an explicitly passed `user` prop, otherwise fall back to AuthContext.
   const { user: ctxUser } = useAuth() || {};
   const user = propUser || ctxUser || {};
   const [logs, setLogs] = useState([]);
-  // Stats removed per request — we no longer display aggregate action stats here
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState({});
   const [selectedUserId, setSelectedUserId] = useState(propUserId);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [userConfigs, setUserConfigs] = useState([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
 
   useEffect(() => {
     // Include selectedUserId into filters for fetching logs
@@ -26,14 +29,96 @@ export function ActivityLog({ user: propUser, userId: propUserId = null, onClose
       setLoading(true);
       const query = { ...filters, ...overrideFilters, page, limit: 15 };
       const response = await getActivityLogs(query);
-      // Filter out noisy client-side MODEL_LOADED events from display
-      const filtered = (response.logs || []).filter((l) => l.action !== 'MODEL_LOADED');
-      setLogs(filtered);
+      let filtered = (response.logs || []).filter((l) => l.action !== 'MODEL_LOADED' && l.action !== 'model-change');
+
+      // Consolidate multiple TEXTURE_APPLIED events with same texture and timestamp into Global Texture Applied
+      const consolidatedLogs = [];
+      const textureGroups = new Map();
+
+      filtered.forEach(log => {
+        if (log.action === 'TEXTURE_APPLIED' && log.details?.textureSource) {
+          const key = `${log.modelName}_${log.details.textureSource}_${new Date(log.timestamp).getTime()}`;
+          if (!textureGroups.has(key)) {
+            textureGroups.set(key, {
+              logs: [],
+              timestamp: log.timestamp,
+              modelName: log.modelName,
+              ipAddress: log.ipAddress,
+              userName: log.userName,
+              userEmail: log.userEmail
+            });
+          }
+          textureGroups.get(key).logs.push(log);
+        } else {
+          consolidatedLogs.push(log);
+        }
+      });
+
+      // Process texture groups
+      textureGroups.forEach(group => {
+        if (group.logs.length > 1) {
+          // Multiple textures with same source - consolidate into Global Texture Applied
+          consolidatedLogs.push({
+            _id: `consolidated_${group.logs[0]._id}`,
+            action: 'Global Texture Applied',
+            timestamp: group.timestamp,
+            modelName: group.modelName,
+            ipAddress: group.ipAddress,
+            userName: group.userName,
+            userEmail: group.userEmail,
+            details: {
+              textureSource: group.logs[0].details.textureSource,
+              appliedParts: group.logs.map(log => log.details.partName),
+              partCount: group.logs.length,
+              mappingConfig: group.logs[0].details.mappingConfig,
+              widgetType: 'texture'
+            }
+          });
+        } else {
+          // Single texture - keep as TEXTURE_APPLIED
+          consolidatedLogs.push(group.logs[0]);
+        }
+      });
+
+      // Sort by timestamp (newest first)
+      consolidatedLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      setLogs(consolidatedLogs);
       setTotalPages(response.totalPages);
     } catch (error) {
       console.error("Error fetching activity logs:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUserConfigs = async (userId) => {
+    try {
+      setLoadingConfigs(true);
+      const configs = await getUserConfigs(userId);
+      setUserConfigs(configs);
+      setShowConfigModal(true);
+    } catch (error) {
+      console.error("Error fetching user configs:", error);
+      alert("Failed to load user configurations");
+    } finally {
+      setLoadingConfigs(false);
+    }
+  };
+
+  const deleteConfig = async (configId) => {
+    if (!window.confirm('Are you sure you want to delete this configuration? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await deleteUserConfig(configId);
+      // Remove the deleted config from the state
+      setUserConfigs(prevConfigs => prevConfigs.filter(config => config._id !== configId));
+      alert('Configuration deleted successfully');
+    } catch (error) {
+      console.error("Error deleting config:", error);
+      alert("Failed to delete configuration");
     }
   };
 
@@ -56,9 +141,10 @@ export function ActivityLog({ user: propUser, userId: propUserId = null, onClose
       LOGIN: "#4caf50",
       LOGOUT: "#f44336",
       TEXTURE: "#ff9800",
+      "Global Texture Applied": "#10b981",
       DOOR: "#2196f3",
       DRAWER: "#9c27b0",
-      LIGHT: "#ffeb3b",
+      LIGHT: "#ffc107",
       PRESET: "#673ab7",
       ERROR: "#f44336",
       default: "#607d8b"
@@ -83,7 +169,14 @@ export function ActivityLog({ user: propUser, userId: propUserId = null, onClose
         </div>
         {/* If viewing a specific user's activity, allow admin to delete those logs */}
         {user.role === 'admin' && selectedUserId && (
-          <div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              className="kt-btn primary sm" 
+              onClick={() => fetchUserConfigs(selectedUserId)}
+              disabled={loadingConfigs}
+            >
+              {loadingConfigs ? 'Loading...' : 'View Saved Config'}
+            </button>
             <button className="kt-btn danger sm" onClick={async () => {
               if (!window.confirm('Permanently delete all activity logs for this user?')) return;
               try {
@@ -108,9 +201,6 @@ export function ActivityLog({ user: propUser, userId: propUserId = null, onClose
         )}
       </div>
 
-      {/* Stats Overview */}
-      {/* Stats intentionally removed per admin request */}
-
       {/* Filters - Only for admin */}
       {user.role === "admin" && (
         <div className="activity-filters">
@@ -132,44 +222,51 @@ export function ActivityLog({ user: propUser, userId: propUserId = null, onClose
         </div>
       )}
 
-      {/* Activity List */}
-      <div className="activity-list">
-        {logs.map((log) => (
-          <div key={log._id} className="activity-item">
-            <div className="activity-header">
-              <div className="action-badge" style={{ backgroundColor: getActionColor(log.action) }}>
-                {log.action}
-              </div>
-              <span className="activity-time">{formatDate(log.timestamp)}</span>
-            </div>
-            
-            <div className="activity-details">
-              <div className="user-info">
-                <strong className="user-clickable" onClick={() => setSelectedUserId(log.userId)} style={{cursor:'pointer', textDecoration:'underline'}}>{log.userName}</strong>
-                <span className="user-email">{log.userEmail}</span>
+      {/* Activity Table */}
+      <div className="activity-table-container">
+        <table className="activity-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Model</th>
+              <th>Timestamp</th>
+              <th>Details</th>
+              {user.role === "admin" && <th>IP Address</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log) => (
+              <tr key={log._id} className="activity-row">
+                <td>
+                  <div className="action-badge" style={{ backgroundColor: getActionColor(log.action) }}>
+                    {log.action}
+                  </div>
+                </td>
+                <td>
+                  <div className="model-info">
+                    {log.modelName && <div>{log.modelName}</div>}
+                  </div>
+                </td>
+                <td className="activity-time">
+                  {formatDate(log.timestamp)}
+                </td>
+                <td>
+                  {log.details && Object.keys(log.details).length > 0 && (
+                    <div className="activity-details-json">
+                      <details>
+                        <summary>View Details</summary>
+                        <pre>{JSON.stringify(log.details, null, 2)}</pre>
+                      </details>
+                    </div>
+                  )}
+                </td>
                 {user.role === "admin" && (
-                  <span className="ip-address">IP: {log.ipAddress}</span>
+                  <td className="ip-address">{log.ipAddress}</td>
                 )}
-              </div>
-
-              {(log.modelName || log.partName) && (
-                <div className="model-info">
-                  {log.modelName && <span>Model: {log.modelName}</span>}
-                  {log.partName && <span>Part: {log.partName}</span>}
-                </div>
-              )}
-
-              {log.details && Object.keys(log.details).length > 0 && (
-                <div className="activity-details-json">
-                  <details>
-                    <summary>Details</summary>
-                    <pre>{JSON.stringify(log.details, null, 2)}</pre>
-                  </details>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* Pagination */}
@@ -196,6 +293,61 @@ export function ActivityLog({ user: propUser, userId: propUserId = null, onClose
       {logs.length === 0 && !loading && (
         <div className="no-activities">
           <p>No activities found</p>
+        </div>
+      )}
+
+      {/* User Configurations Modal */}
+      {showConfigModal && (
+        <div className="activity-modal-overlay" onClick={() => setShowConfigModal(false)}>
+          <div className="activity-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="activity-modal-header">
+              <h3>User Saved Configurations</h3>
+              <button 
+                className="activity-modal-close" 
+                onClick={() => setShowConfigModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="activity-modal-content">
+              {loadingConfigs ? (
+                <div className="loading">Loading configurations...</div>
+              ) : userConfigs.length === 0 ? (
+                <div className="no-configs">
+                  <p>No saved configurations found for this user</p>
+                </div>
+              ) : (
+                <>
+                  <div className="config-summary">
+                    <p><strong>Total Configurations:</strong> {userConfigs.length}</p>
+                    <p><strong>Models Used:</strong> {[...new Set(userConfigs.map(c => c.modelName))].join(', ')}</p>
+                  </div>
+                  <div className="config-list">
+                    {userConfigs.map((config) => (
+                      <div key={config._id} className="config-item">
+                        <div className="config-header">
+                          <span className="config-model">{config.modelName}</span>
+                          <span className="config-date">
+                            {new Date(config.updatedAt).toLocaleDateString()}
+                          </span>
+                          <button 
+                            className="kt-btn danger sm config-delete-btn" 
+                            onClick={() => deleteConfig(config._id)}
+                            title="Delete this configuration"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                        <div className="config-details">
+                          <small>ID: {config._id}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

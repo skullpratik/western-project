@@ -83,6 +83,19 @@ export function Experience({
     getInteractionType: interactionsGetInteractionType
   } = useInteractions(allObjects, config);
 
+  // Activity logging helper
+  const logInteraction = useCallback(async (action, details = {}) => {
+    try {
+      await logActivity({
+        action,
+        modelName,
+        details
+      });
+    } catch (error) {
+      console.error('Failed to log interaction:', error);
+    }
+  }, [modelName]);
+
   // Load the main model (base model)
   logOnce('load_model', 'Loading main model from:', config.path);
   logOnce('config_snapshot', 'Full config object:', JSON.stringify(config, null, 2));
@@ -489,23 +502,63 @@ export function Experience({
     return () => window.removeEventListener('error', errorHandler, true);
   }, [modelName, onModelError]);
 
-  // Activity logging function
-  const logInteraction = useCallback(async (action, details = {}) => {
-    try {
-      if (user && user.id) {
-        await logActivity({
-          action,
-          modelName: config?.name || modelName,
-          partName: details.partName,
-          widgetType: details.widgetType,
-          details,
-          visibility: user.role === "admin" ? "admin" : "user"
+  // Consolidated texture logging to avoid spam when applying same texture to multiple parts
+  const logTextureApplication = useCallback((partName, textureSource, mappingConfig, widgetType) => {
+    const now = Date.now();
+    const logKey = `${textureSource}_${now}`;
+
+    // Add to recent logs
+    setRecentTextureLogs(prev => [...prev, {
+      key: logKey,
+      partName,
+      textureSource,
+      mappingConfig,
+      widgetType,
+      timestamp: now
+    }]);
+
+    // Consolidate logs after a short delay
+    setTimeout(() => {
+      setRecentTextureLogs(currentLogs => {
+        const recentLogs = currentLogs.filter(log => now - log.timestamp < 2000); // 2 second window
+        const textureGroups = {};
+
+        // Group by texture source
+        recentLogs.forEach(log => {
+          if (!textureGroups[log.textureSource]) {
+            textureGroups[log.textureSource] = [];
+          }
+          textureGroups[log.textureSource].push(log.partName);
         });
-      }
-    } catch (error) {
-      console.error("Failed to log interaction:", error);
-    }
-  }, [user, modelName, config]);
+
+        // Log consolidated events
+        Object.entries(textureGroups).forEach(([textureSource, partNames]) => {
+          if (partNames.length > 1) {
+            // Multiple parts with same texture - log as global
+            logInteraction("Global Texture Applied", {
+              appliedParts: partNames,
+              textureSource,
+              partCount: partNames.length,
+              mappingConfig,
+              widgetType: "texture",
+              modelName: modelName
+            });
+          } else {
+            // Single part - log individual
+            logInteraction("TEXTURE_APPLIED", {
+              partName: partNames[0],
+              textureSource,
+              mappingConfig,
+              widgetType
+            });
+          }
+        });
+
+        // Clear processed logs
+        return currentLogs.filter(log => now - log.timestamp >= 2000);
+      });
+    }, 500); // Wait 500ms for more applications
+  }, [logInteraction, modelName]);
 
   // -----------------------
   // Light helpers
@@ -2049,13 +2102,14 @@ export function Experience({
           }
 
           // Log global texture application
-          logInteraction("GLOBAL_TEXTURE_APPLIED", {
+          logInteraction("Global Texture Applied", {
             materialName: targetMaterialName,
             appliedCount: applied,
             excludedParts: exclude,
             textureSource: texture instanceof File ? texture.name : texture,
             mappingConfig,
-            widgetType: "globalTexture"
+            widgetType: "globalTexture",
+            modelName: modelName // Include model name in the log
           });
 
           console.log(`🌍 Global texture applied to ${applied} object(s) (material: "${targetMaterialName}")`);
@@ -2079,7 +2133,8 @@ export function Experience({
     config.lights,
     lights,
     config,
-    logInteraction
+    logInteraction,
+    logTextureApplication
   ]);
 
   // -----------------------

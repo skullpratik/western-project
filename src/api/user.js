@@ -103,3 +103,21 @@ export const deleteActivityForUser = async (userId) => {
     throw error;
   }
 };
+
+export const getUserConfigs = async (userId) => {
+  try {
+    const res = await api.get(`/admin/user-configs/${userId}`);
+    return res.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const deleteUserConfig = async (configId) => {
+  try {
+    const res = await api.delete(`/admin/user-configs/${configId}`);
+    return res.data;
+  } catch (error) {
+    throw error;
+  }
+};
