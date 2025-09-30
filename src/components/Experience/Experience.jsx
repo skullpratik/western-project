@@ -31,6 +31,15 @@ export function Experience({
   // Use provided modelConfig or fallback to allModels
   const config = modelConfig || (allModels && allModels[modelName]);
 
+  // Debug UI state for live tuning
+  const [exposure] = useState(1.5);
+  const [envIntensity, setEnvIntensity] = useState(1);
+  const [bloomStrength] = useState(0.3);
+  const [forceGlossy, setForceGlossy] = useState(false);
+
+  // Material inspector overlay: show first N materials and their properties
+  // Inspector UI removed per user request
+
   // Debug logging: set `debugLogs: true` in model config to enable
   const debug = !!config?.debugLogs;
 
@@ -203,12 +212,41 @@ export function Experience({
         gl.physicallyCorrectLights = true;
         gl.outputEncoding = THREE.sRGBEncoding;
         gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1;
+        gl.toneMappingExposure = exposure;
+        // Log renderer state for diagnostics
+        console.log('[Renderer] exposure:', exposure, 'envIntensity:', envIntensity, 'bloomStrength:', bloomStrength, 'toneMapping:', gl.toneMapping, 'outputEncoding:', gl.outputEncoding);
       }
     } catch (e) {
       /* ignore */
     }
-  }, [gl]);
+  }, [gl, exposure, envIntensity, bloomStrength]);
+
+  // Material normalization: force glossy if enabled
+  useEffect(() => {
+    if (!mainScene) return;
+    mainScene.traverse((child) => {
+      if (child.isMesh && child.material) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach((mat) => {
+          if (!mat) return;
+          // Clamp envMapIntensity to a low value to avoid glowing effect
+          mat.envMapIntensity = 0;
+          // Remove any emissive intensity
+          mat.emissiveIntensity = 0;
+          // Remove any custom glow logic
+          if (mat.emissive) mat.emissive.set(0x000000);
+          // Optionally, clamp roughness/metalness to reasonable defaults
+          if (forceGlossy) {
+            mat.roughness = 0.08;
+            mat.metalness = 0.95;
+          }
+          mat.needsUpdate = true;
+        });
+      }
+    });
+  }, [mainScene, forceGlossy]);
+
+  // Material inspector logic removed (no debug UI)
 
   // Normalize materials and embedded lights on the loaded scene to avoid overly emissive or colored artifacts
   useEffect(() => {
@@ -2331,9 +2369,9 @@ export function Experience({
   {/* Studio lighting (universal product setup). When `isPerformanceMode` is true we
       reduce or skip heavy lighting/features to keep interaction smooth. */}
   {/* Always include HDRI environment so materials can sample it; lower intensity in perf mode */}
-  <Environment preset="city" background={false} intensity={isPerformanceMode ? 0.25 : 0.7} />
+  <Environment files="./environment.hdr" background={false} intensity={isPerformanceMode ? 0.25 : 0.7} />
 
-  <color attach="background" args={['#7d7d7d']} />
+  <color attach="background" args={['#dddcdc']} />
 
   {/* Subtle hemisphere for fill */}
   <hemisphereLight skyColor={0xffffff} groundColor={0x444444} intensity={0.25} />
@@ -2345,41 +2383,29 @@ export function Experience({
   <directionalLight
     name="KeyLight"
     position={[4.5, 6, 5]}
-    intensity={0.95}
-    castShadow={false}
-    shadowBias={-0.0001}
+    intensity={1.5}
+    castShadow={true}
+    shadow-mapSize-width={2048}
+    shadow-mapSize-height={2048}
+    shadow-radius={8}
+    shadow-bias={-0.0001}
   />
-
-  {/* Fill light: cooler, lower intensity from opposite side */}
   <directionalLight
     name="FillLight"
     position={[-4.5, 3.5, -2.5]}
-    intensity={0.45}
+    intensity={0.85}
     color={0xc6e0ff}
     castShadow={false}
   />
-
-  {/* Rim/back light to separate model from background */}
   <directionalLight
     name="RimLight"
     position={[0, 5.5, -6]}
-    intensity={0.35}
+    intensity={0.65}
     color={0xfff1e6}
     castShadow={false}
   />
 
-  {/* Contact shadows only when not in performance mode (can be expensive) */}
-  {config?.shadows?.enabled !== false && !isPerformanceMode && (
-    <ContactShadows
-      position={config?.shadows?.position || [0, -2, 0]}
-      opacity={config?.shadows?.opacity || 0.35}
-      scale={config?.shadows?.scale || 8}
-      blur={config?.shadows?.blur || 2.0}
-      far={config?.shadows?.far || 4.5}
-      resolution={config?.shadows?.resolution || 512}
-      color={config?.shadows?.color || "#000000"}
-    />
-  )}
+  {/* ContactShadows removed as requested */}
 
       <group ref={modelGroupRef} onPointerDown={handlePointerDown}>
         {/* Render main model scene */}
@@ -2424,8 +2450,13 @@ export function Experience({
 
       {/* Minimal post-processing for smooth rendering only */}
       <EffectComposer>
+        <Bloom intensity={bloomStrength} luminanceThreshold={0.18} luminanceSmoothing={0.12} mipmapBlur />
+        <SSAO samples={12} radius={0.18} intensity={1.2} luminanceInfluence={0.5} color="black" />
+  <ToneMapping adaptive={false} mode={3} resolution={256} />
         <SMAA />
       </EffectComposer>
+
+      {/* Debug UI overlay and toggle button removed as requested */}
     </Suspense>
   );
 }
