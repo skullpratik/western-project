@@ -9,9 +9,13 @@
       "glowMeshes": [
         "Cylinder001",
         "Insidestrip1",
-        "Insidestrip2"
+        "Insidestrip2",
+        "Insidestrip3",
+        "Insidestrip4",
+        "Insidestrip5",
+        "Insidestrip6"
       ],
-      "glowIntensity": 0.5,
+      "glowIntensity": 0.2,
       "glowColor": "#ffffff"
     }
   ],

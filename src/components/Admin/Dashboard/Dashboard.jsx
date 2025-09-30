@@ -1,21 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
-// Temporarily disabled chart imports to fix React hooks issue
-// import { Line, Doughnut, Bar } from 'react-chartjs-2';
-// import {
-//   Chart as ChartJS,
-//   LineElement,
-//   PointElement,
-//   LinearScale,
-//   CategoryScale,
-//   ArcElement,
-//   BarElement,
-//   Tooltip,
-//   Legend
-// } from 'chart.js';
+import { Line, Doughnut, Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  ArcElement,
+  BarElement,
+  Tooltip,
+  Legend
+} from 'chart.js';
 import { useAuth } from '../../../context/AuthContext';
 import './Dashboard.css';
 
-// ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, ArcElement, BarElement, Tooltip, Legend);
+ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, ArcElement, BarElement, Tooltip, Legend);
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -114,69 +113,78 @@ const Dashboard = () => {
     </div>
   );
 
-  // Chart colors and data generation temporarily disabled
-  // const chartColors = {
-  //   primary: 'rgba(99,102,241,0.9)',
-  //   primaryLine: 'rgba(99,102,241,0.3)',
-  //   success: 'rgba(16,185,129,0.9)',
-  //   warning: 'rgba(245,158,11,0.9)',
-  //   danger: 'rgba(220,38,38,0.9)',
-  //   info: 'rgba(14,165,233,0.9)',
-  //   neutral: 'rgba(148,163,184,0.9)'
-  // };
+  // Chart colors and data generation
+  const chartColors = {
+    primary: 'rgba(99,102,241,0.9)',
+    primaryLine: 'rgba(99,102,241,0.3)',
+    success: 'rgba(16,185,129,0.9)',
+    warning: 'rgba(245,158,11,0.9)',
+    danger: 'rgba(220,38,38,0.9)',
+    info: 'rgba(14,165,233,0.9)',
+    neutral: 'rgba(148,163,184,0.9)'
+  };
 
-  // const activityChartData = useMemo(() => {
-  //   const labels = stats.recentActivity.map(a => a._id).slice(-10);
-  //   const values = stats.recentActivity.map(a => a.count).slice(-10);
-  //   return {
-  //     labels,
-  //     datasets: [
-  //       {
-  //         label: 'Actions',
-  //         data: values,
-  //         fill: true,
-  //           tension: 0.35,
-  //           backgroundColor: chartColors.primaryLine,
-  //           borderColor: chartColors.primary,
-  //           pointBackgroundColor: chartColors.primary,
-  //           pointRadius: 4,
-  //           pointHoverRadius: 6
-  //       }
-  //     ]
-  //   };
-  // }, [stats.recentActivity]);
+  const activityChartData = useMemo(() => {
+    const labels = stats.recentActivity.map(a => a._id).slice(-10);
+    const values = stats.recentActivity.map(a => a.count).slice(-10);
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Actions',
+          data: values,
+          fill: true,
+          tension: 0.35,
+          backgroundColor: chartColors.primaryLine,
+          borderColor: chartColors.primary,
+          pointBackgroundColor: chartColors.primary,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        }
+      ]
+    };
+  }, [stats.recentActivity]);
 
-  // const userRoleData = useMemo(() => ({
-  //   labels: ['Admins', 'Users'],
-  //   datasets: [
-  //     {
-  //       data: [stats.adminUsers, stats.standardUsers],
-  //       backgroundColor: [chartColors.info, chartColors.primary],
-  //       borderWidth: 0,
-  //       hoverOffset: 6
-  //     }
-  //   ]
-  // }), [stats]);
+  const userRoleData = useMemo(() => ({
+    labels: ['Admins', 'Users'],
+    datasets: [
+      {
+        data: [stats.adminUsers, stats.standardUsers],
+        backgroundColor: [chartColors.info, chartColors.primary],
+        borderWidth: 0,
+        hoverOffset: 6
+      }
+    ]
+  }), [stats]);
 
-  // const activeUserData = useMemo(() => ({
-  //   labels: ['Active', 'Inactive'],
-  //   datasets: [
-  //     {
-  //       label: 'Users',
-  //       data: [stats.activeUsers, stats.inactiveUsers],
-  //       backgroundColor: [chartColors.success, chartColors.warning],
-  //       borderRadius: 6,
-  //       maxBarThickness: 42
-  //     }
-  //   ]
-  // }), [stats]);
+  const activeUserData = useMemo(() => ({
+    labels: ['Active', 'Inactive'],
+    datasets: [
+      {
+        label: 'Users',
+        data: [stats.activeUsers, stats.inactiveUsers],
+        backgroundColor: [chartColors.success, chartColors.warning],
+        borderRadius: 6,
+        maxBarThickness: 42
+      }
+    ]
+  }), [stats]);
 
-  // const baseOptions = {
-  //   responsive: true,
-  //   maintainAspectRatio: false,
-  //   plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
-  //   scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { precision:0 } } }
-  // };
+  const baseOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { mode: 'index', intersect: false }
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: {
+        grid: { color: 'rgba(0,0,0,0.05)' },
+        ticks: { precision: 0 }
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -226,31 +234,27 @@ const Dashboard = () => {
       <div className="kt-charts-grid">
         <div className="kt-card">
           <div className="kt-chart-title">📈 Activity</div>
-          <div style={{height:'120px', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--kt-surface-alt)', borderRadius:'6px', color:'var(--kt-text-soft)'}}>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontSize:'24px', marginBottom:'4px'}}>📊</div>
-              <div style={{fontSize:'12px', fontWeight:'500'}}>Chart disabled</div>
-            </div>
+          <div style={{height:'180px'}}>
+            <Line data={activityChartData} options={baseOptions} />
           </div>
         </div>
         <div className="kt-card">
           <div className="kt-chart-title">🧩 User Roles</div>
-          <div style={{height:'120px', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--kt-surface-alt)', borderRadius:'6px', color:'var(--kt-text-soft)'}}>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontSize:'24px', marginBottom:'4px'}}>🔵</div>
-              <div style={{fontSize:'13px', fontWeight:'600', marginBottom:'2px'}}>Admins: {stats.adminUsers}</div>
-              <div style={{fontSize:'13px', fontWeight:'600'}}>Users: {stats.standardUsers}</div>
-            </div>
+          <div style={{height:'180px', display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <Doughnut data={userRoleData} options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'bottom' },
+                tooltip: { mode: 'nearest' }
+              }
+            }} />
           </div>
         </div>
         <div className="kt-card">
           <div className="kt-chart-title">👥 Status</div>
-          <div style={{height:'120px', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--kt-surface-alt)', borderRadius:'6px', color:'var(--kt-text-soft)'}}>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontSize:'24px', marginBottom:'4px'}}>📊</div>
-              <div style={{fontSize:'13px', fontWeight:'600', marginBottom:'2px'}}>Active: {stats.activeUsers}</div>
-              <div style={{fontSize:'13px', fontWeight:'600'}}>Inactive: {stats.inactiveUsers}</div>
-            </div>
+          <div style={{height:'180px'}}>
+            <Bar data={activeUserData} options={baseOptions} />
           </div>
         </div>
       </div>

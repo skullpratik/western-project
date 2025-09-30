@@ -16,15 +16,15 @@ import {
   getModelSize 
 } from "../../utils/modelPositioning";
 
-export function Experience({ 
-  modelName, 
-  modelConfig, 
-  allModels, 
-  onTogglePart, 
-  onApiReady, 
-  applyRequest, 
-  userPermissions, 
-  user, 
+export function Experience({
+  modelName,
+  modelConfig,
+  allModels,
+  onTogglePart,
+  onApiReady,
+  applyRequest,
+  userPermissions,
+  user,
   onModelError,
   onModelTransformChange
 }) {
@@ -33,29 +33,9 @@ export function Experience({
 
   // Debug logging: set `debugLogs: true` in model config to enable
   const debug = !!config?.debugLogs;
-  // Hook-based logger helpers (declare before first use)
-  const loggedKeysRef = useRef({});
-  const logOnce = (key, ...args) => {
-    if (!debug) return;
-    if (loggedKeysRef.current[key]) return;
-    loggedKeysRef.current[key] = true;
-    console.log(...args);
-  };
-  // Log user permissions once to diagnose admin preview rotation issues
-  logOnce('user_permissions', 'User permissions passed to Experience:', userPermissions, 'user:', user);
-  
-  // Guard against undefined config
-  if (!config) {
-    console.error(`Model configuration not found for: ${modelName}`);
-    return <mesh><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color="red" /></mesh>;
-  }
 
-  // Guard against invalid model paths
-  if (config.path && config.path.includes('blob:')) {
-    console.warn(`Skipping blob URL model: ${modelName}`);
-    return <mesh><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color="yellow" /></mesh>;
-  }
-  
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL LOGIC OR EARLY RETURNS
+  const loggedKeysRef = useRef({});
   const { camera, gl, scene: r3fScene } = useThree();
   const { invalidate } = useThree();
   const orbitControlsRef = useRef();
@@ -69,6 +49,31 @@ export function Experience({
   const allObjects = useRef({});
   const clickHelpers = useRef(new Map());
   const originalMaterials = useRef(new Map()); // Store original materials for glow restoration
+
+  // Hook-based logger helpers (declare after hooks)
+  const logOnce = (key, ...args) => {
+    if (!debug) return;
+    if (loggedKeysRef.current[key]) return;
+    loggedKeysRef.current[key] = true;
+    console.log(...args);
+  };
+
+  // Log user permissions once to diagnose admin preview rotation issues
+  logOnce('user_permissions', 'User permissions passed to Experience:', userPermissions, 'user:', user);
+
+  // EARLY RETURNS MUST HAPPEN AFTER ALL HOOKS ARE CALLED
+
+  // Guard against undefined config
+  if (!config) {
+    console.error(`Model configuration not found for: ${modelName}`);
+    return <mesh><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color="red" /></mesh>;
+  }
+
+  // Guard against invalid model paths
+  if (config.path && config.path.includes('blob:')) {
+    console.warn(`Skipping blob URL model: ${modelName}`);
+    return <mesh><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color="yellow" /></mesh>;
+  }
 
   // Allow interactionGroups to be provided under metadata as well
   const interactionGroups = config.interactionGroups || config.metadata?.interactionGroups || [];
@@ -1716,7 +1721,7 @@ export function Experience({
             if (found) {
               const mats = Array.isArray(found.material) ? found.material : [found.material];
               const matWithMap = mats.find(m => m && m.map && m.map.image);
-              if (matWithMap) {
+              if (matWithMap && matWithMap.map) {
                 const img = matWithMap.map.image;
                 const src = img?.currentSrc || img?.src || (matWithMap.map?.image && matWithMap.map.image.toString && matWithMap.map.image.toString()) || null;
                 textures[name] = {
@@ -2326,7 +2331,7 @@ export function Experience({
   {/* Studio lighting (universal product setup). When `isPerformanceMode` is true we
       reduce or skip heavy lighting/features to keep interaction smooth. */}
   {/* Always include HDRI environment so materials can sample it; lower intensity in perf mode */}
-  <Environment files="photo_studio_01_1k.hdr" background={false} intensity={isPerformanceMode ? 0.25 : 0.7} />
+  <Environment preset="city" background={false} intensity={isPerformanceMode ? 0.25 : 0.7} />
 
   <color attach="background" args={['#7d7d7d']} />
 

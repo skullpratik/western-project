@@ -267,7 +267,7 @@ body.admin-mode { font-family: var(--kt-font-family); background: var(--kt-bg); 
   gap:12px; 
   grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); 
 }
-.kt-chart-card canvas { width:100%!important; height:150px!important; }
+.kt-chart-card canvas { width:100%!important; height:160px!important; }
 .kt-chart-title { 
   font-size:12px; 
   font-weight:600; 
