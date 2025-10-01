@@ -223,21 +223,46 @@ export function Interface({
 
   // Map widget types to permission requirements
   const getWidgetPermission = (widgetType) => {
-    // Map widget to backend permission keys; fall back to derived intents
+    // Normalize widgetType to a canonical key (lowercase, strip non-alphanum and trailing 'widget')
+    if (!widgetType || typeof widgetType !== 'string') return 'textureWidget';
+    const normalized = widgetType.replace(/[^a-zA-Z0-9]/g, '').replace(/widget$/i, '').toLowerCase();
+
+    // Extended mapping: map many widget type variants to backend permission keys
     const permissionMap = {
-      doorPresets: 'doorPresets',
-  globalTextureWidget: 'globalTextureWidget',
-  textureWidget: 'textureWidget',
-  lightWidget: 'lightWidget',
-  screenshotWidget: 'screenshotWidget',
-      reflectionWidget: 'lightWidget', // Reflection uses light permission
-      movementWidget: 'canMove', // Movement uses canMove permission
-      customWidget: 'textureWidget', // Custom widgets use texture permission (most common)
-      saveConfig: 'saveConfig',
-      modelPosition: 'canMove',
+      doorpresets: 'doorPresets',
+      doorpreset: 'doorPresets',
+      doorpresetwidget: 'doorPresets',
+      doortoggles: 'doorToggles',
+      doortoggle: 'doorToggles',
+      drawertoggles: 'drawerToggles',
+      drawertoggle: 'drawerToggles',
+      texture: 'textureWidget',
+      texturewidget: 'textureWidget',
+      globaltexture: 'globalTextureWidget',
+      globaltexturewidget: 'globalTextureWidget',
+      light: 'lightWidget',
+      lightwidget: 'lightWidget',
+      screenshot: 'screenshotWidget',
+      screenshotwidget: 'screenshotWidget',
+      reflection: 'lightWidget',
+      movement: 'canMove',
+      saveconfig: 'saveConfig',
+      modelposition: 'canMove',
+      custom: 'textureWidget'
     };
-    const permission = permissionMap[widgetType] || 'textureWidget'; // Default to textureWidget instead of canRead
-    return permission;
+
+    // prefer exact normalized match, otherwise try suffix matches
+    if (permissionMap[normalized]) return permissionMap[normalized];
+
+    // try to find a key that contains normalized (covers odd naming)
+    const found = Object.keys(permissionMap).find(k => k.includes(normalized) || normalized.includes(k));
+    if (found) return permissionMap[found];
+
+    // fallback defaults
+    if (normalized.includes('door')) return 'doorToggles';
+    if (normalized.includes('texture')) return 'textureWidget';
+    if (normalized.includes('light')) return 'lightWidget';
+    return 'textureWidget';
   };
 
   // Filter widgets based on user permissions (memoized to prevent loops)
@@ -245,6 +270,11 @@ export function Interface({
     const filtered = allWidgets.filter(widget => {
       const requiredPermission = getWidgetPermission(widget.type);
       const hasPermissionResult = hasPermission(requiredPermission);
+      if (!hasPermissionResult) {
+        console.debug(`Interface: widget "${widget.type}" requires "${requiredPermission}" but user lacks it`);
+      } else {
+        console.debug(`Interface: widget "${widget.type}" allowed (permission: ${requiredPermission})`);
+      }
       return hasPermissionResult;
     });
     

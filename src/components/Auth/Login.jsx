@@ -10,6 +10,7 @@ export function Login() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [error, setError] = useState("");
   const [showCustomLogin, setShowCustomLogin] = useState(false);
+  // Self-registration disabled in production; admin will provide credentials
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -49,18 +50,8 @@ export function Login() {
     
     try {
       if (isRegistering) {
-        const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, password })
-        });
-
-        if (!response.ok) {
-          const err = await response.json().catch(() => ({}));
-          throw new Error(err.message || "Registration failed");
-        }
-        // Auto-login after register
-        await authLogin(email, password);
+        // Prevent client-side registration when disabled server-side
+        setError("Self-registration is disabled. Please contact your administrator to request an account.");
       } else {
         await authLogin(email, password);
       }
@@ -93,18 +84,7 @@ export function Login() {
           )}
 
           <form onSubmit={handleCustomLogin} className="login-form">
-            {isRegistering && (
-              <div className="form-group">
-                <label>Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
-                  required
-                />
-              </div>
-            )}
+            {/* Name field is present only for registration which is disabled; keep hidden */}
             <div className="form-group">
               <label>Email</label>
               <input
@@ -136,13 +116,7 @@ export function Login() {
             </button>
 
             <div className="custom-login-link" style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setIsRegistering(!isRegistering)}
-              >
-                {isRegistering ? "Already have an account? Login" : "Need an account? Register"}
-              </button>
+              <small>Self-registration is disabled. Contact your administrator for credentials.</small>
             </div>
           </form>
         </div>

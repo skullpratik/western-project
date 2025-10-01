@@ -12,6 +12,9 @@ const UserManagement = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [activityUserId, setActivityUserId] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'user' });
+  const [createdPassword, setCreatedPassword] = useState('');
 
   useEffect(() => {
     fetchUsers();
@@ -223,6 +226,9 @@ const UserManagement = () => {
             <span className="badge">Active {users.filter(u => u.isActive).length}</span>
             {/* Per-user delete available inside the ActivityLog modal */}
           </div>
+          <div>
+            <button className="kt-btn primary" onClick={() => setShowCreateModal(true)}>Create User</button>
+          </div>
         </div>
       </div>
 
@@ -358,6 +364,88 @@ const UserManagement = () => {
                 <button type="submit" className="kt-btn primary">Update User</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {showCreateModal && (
+        <div className="modal-overlay" style={{position:'fixed', inset:0, background:'rgba(15,23,42,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'60px 20px', zIndex:200}}>
+          <div className="kt-card" style={{width:'min(520px,100%)'}}>
+            <div className="flex" style={{justifyContent:'space-between', alignItems:'center'}}>
+              <div className="kt-card-header" style={{marginBottom:0}}>Create User</div>
+              <button onClick={() => setShowCreateModal(false)} style={{border:'none', background:'transparent', fontSize:24, lineHeight:1, cursor:'pointer'}}>×</button>
+            </div>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                const token = localStorage.getItem('token');
+                const resp = await fetch(`${API_BASE_URL}/api/admin-dashboard/users`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify(newUser)
+                });
+                if (!resp.ok) {
+                  const err = await resp.json().catch(() => ({}));
+                  throw new Error(err.message || 'Failed to create user');
+                }
+                const data = await resp.json();
+                // capture password so admin can copy it for the user
+                setCreatedPassword(newUser.password || '');
+                // refresh list
+                await fetchUsers();
+                setShowCreateModal(false);
+                setNewUser({ name: '', email: '', password: '', role: 'user' });
+              } catch (err) {
+                console.error('Create user error', err);
+                setError(err.message || 'Failed to create user');
+              }
+            }} className="flex flex-col gap-12" style={{marginTop:12}}>
+              <div style={{display:'grid', gap:8}}>
+                <label style={{fontSize:12, fontWeight:600}}>Name</label>
+                <input required value={newUser.name} onChange={(e) => setNewUser(prev => ({ ...prev, name: e.target.value }))} />
+
+                <label style={{fontSize:12, fontWeight:600, marginTop:8}}>Email</label>
+                <input required type="email" value={newUser.email} onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))} />
+
+                <label style={{fontSize:12, fontWeight:600, marginTop:8}}>Password</label>
+                <input required type="password" value={newUser.password} onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))} />
+
+                <label style={{fontSize:12, fontWeight:600, marginTop:8}}>Role</label>
+                <select value={newUser.role} onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value }))}>
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              <div className="flex" style={{justifyContent:'flex-end', gap:12}}>
+                <button type="button" className="kt-btn outline" onClick={() => setShowCreateModal(false)}>Cancel</button>
+                <button type="button" className="kt-btn" onClick={() => {
+                  // generate a strong password
+                  const pwd = Math.random().toString(36).slice(-10) + Math.random().toString(36).toUpperCase().slice(-2) + '!1';
+                  setNewUser(prev => ({ ...prev, password: pwd }));
+                }}>Generate password</button>
+                <button type="submit" className="kt-btn primary">Create</button>
+              </div>
+            </form>
+            {createdPassword && (
+              <div style={{marginTop:12, padding:10, borderTop:'1px dashed var(--kt-border)', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <div>
+                  <div style={{fontSize:12, color:'var(--kt-text-soft)'}}>Temporary password (copy and provide to the user):</div>
+                  <div style={{fontWeight:700, marginTop:6}}>{createdPassword}</div>
+                </div>
+                <div>
+                  <button className="kt-btn" onClick={() => {
+                    try {
+                      navigator.clipboard.writeText(createdPassword);
+                    } catch (e) {
+                      console.warn('Clipboard write failed', e);
+                    }
+                  }}>Copy</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

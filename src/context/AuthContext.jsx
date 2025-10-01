@@ -20,6 +20,57 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
+  // Periodically refresh user info so permission changes applied by admin are picked up
+  useEffect(() => {
+    let intervalId = null;
+    // Only poll when a token exists
+    const token = localStorage.getItem('token');
+    if (token) {
+      intervalId = setInterval(() => {
+        checkAuth();
+      }, 30_000); // every 30 seconds
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, []);
+
+  // Real-time updates via Server-Sent Events (SSE)
+  useEffect(() => {
+    let es;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      es = new EventSource(`${API_BASE_URL}/api/stream?token=${token}`);
+    } catch (err) {
+      console.warn('SSE init failed', err);
+      return;
+    }
+
+    es.addEventListener('connected', (ev) => {
+      // console.log('SSE connected', ev);
+    });
+
+    es.addEventListener('permissionsUpdated', (ev) => {
+      try {
+        // When permissions updated for this user, re-check auth to refresh user object
+        checkAuth();
+      } catch (e) {
+        console.warn('SSE permissionsUpdated handler failed', e);
+      }
+    });
+
+    es.onerror = (err) => {
+      // console.warn('SSE error', err);
+      // Close on persistent errors
+      try { es.close(); } catch (e) {}
+    };
+
+    return () => {
+      try { es.close(); } catch (e) {}
+    };
+  }, []);
+
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem('token');
