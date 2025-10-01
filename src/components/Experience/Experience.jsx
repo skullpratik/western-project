@@ -284,12 +284,14 @@ export function Experience({
           const mats = Array.isArray(child.material) ? child.material : [child.material];
           mats.forEach((mat) => {
             if (!mat) return;
-            // Clamp envMapIntensity to a low value to avoid glowing effect
-            mat.envMapIntensity = 0;
-            // Remove any emissive intensity
-            mat.emissiveIntensity = 0;
-            // Remove any custom glow logic
-            if (mat.emissive) mat.emissive.set(0x000000);
+            // Allow environment/HDRI to contribute to side lighting; provide a conservative default
+            if (typeof mat.envMapIntensity === 'undefined' || mat.envMapIntensity === null) mat.envMapIntensity = 0.6;
+            // Do not unconditionally zero emissiveIntensity here — preserve emissive for textures/glow
+            if (typeof mat.emissiveIntensity === 'undefined' || mat.emissiveIntensity === null) mat.emissiveIntensity = 0;
+            // Only clear overly blue emissive tint which is usually an export artifact
+            if (mat.emissive && (mat.emissive.b > mat.emissive.r + 0.15 && mat.emissive.b > mat.emissive.g + 0.15)) {
+              mat.emissive.set(0x000000);
+            }
             // Optionally, clamp roughness/metalness to reasonable defaults
             if (forceGlossy) {
               mat.roughness = 0.08;
@@ -751,13 +753,44 @@ export function Experience({
             }
 
             // Apply glow effect
-            if (!material.emissive) {
-              material.emissive = new THREE.Color(glowColor);
-            } else {
-              material.emissive.copy(new THREE.Color(glowColor));
+            // If the material has a diffuse map (image), prefer using it as an emissiveMap so
+            // the image itself glows. Otherwise fall back to tinting emissive color.
+            try {
+              if (material.map) {
+                // Use the existing diffuse map as emissiveMap so the texture emits light
+                material.emissiveMap = material.map;
+                // Ensure the emissiveMap uses correct encoding so colors are correct for bloom
+                try {
+                  if (material.emissiveMap && material.emissiveMap.encoding === undefined) {
+                    material.emissiveMap.encoding = THREE.sRGBEncoding;
+                  }
+                } catch (e) {
+                  // ignore
+                }
+                // Ensure emissive color is set (use glowColor to tint emission if needed)
+                if (!material.emissive) material.emissive = new THREE.Color(glowColor);
+                else material.emissive.copy(new THREE.Color(glowColor));
+                // Respect config-provided glowIntensity exactly for textured emissive maps
+                material.emissiveIntensity = glowIntensity;
+                // Force texture/material update
+                try { if (material.emissiveMap) material.emissiveMap.needsUpdate = true; } catch (e) {}
+              } else {
+                // No image map: revert to emissive color tinting
+                if (!material.emissive) {
+                  material.emissive = new THREE.Color(glowColor);
+                } else {
+                  material.emissive.copy(new THREE.Color(glowColor));
+                }
+                material.emissiveIntensity = glowIntensity;
+              }
+            } catch (err) {
+              // Defensive: if anything fails while manipulating maps, fall back to color tint.
+              console.warn('Glow: failed to apply emissive map, falling back to emissive color', err);
+              if (!material.emissive) material.emissive = new THREE.Color(glowColor);
+              else material.emissive.copy(new THREE.Color(glowColor));
+              material.emissiveIntensity = glowIntensity;
             }
 
-            material.emissiveIntensity = glowIntensity;
             material.needsUpdate = true;
           });
         }
@@ -1310,6 +1343,8 @@ export function Experience({
         loader.load(
           src,
           (tex) => {
+            // Prefer flipY=false for imported UI/decals so images map upright by default
+            try { tex.flipY = false; } catch (e) {}
             tex.colorSpace = THREE.SRGBColorSpace;
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
             resolve(tex);
@@ -1349,18 +1384,52 @@ export function Experience({
       if (obj.isMesh && obj.material) {
         console.log(`🔧 Applying texture to mesh with material:`, obj.material);
         const newMat = Array.isArray(obj.material) ? obj.material.map((m) => m.clone()) : obj.material.clone();
+        // Apply texture and make the image appear clearer/brighter by default.
+        const brightnessDefault = mappingConfig.brightness !== undefined ? mappingConfig.brightness : 0.18;
         if (Array.isArray(newMat)) {
           newMat.forEach((m) => {
             if (m && "map" in m) {
               m.map = texture;
-              m.needsUpdate = true;
+              try {
+                // Ensure correct color space for displayed images
+                if (m.map) m.map.encoding = THREE.sRGBEncoding;
+                // Also set texture encoding (texture may be shared)
+                if (texture) texture.encoding = THREE.sRGBEncoding;
+
+                // Make sure applied image appears bright/clear by nudging material base color
+                if (m.color) m.color.set(0xffffff);
+                else m.color = new THREE.Color(0xffffff);
+
+                // Prefer using emissiveMap so the image itself can glow when lights/bloom are used
+                if (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial || true) {
+                  m.emissiveMap = texture;
+                  m.emissive = new THREE.Color(0xffffff);
+                  m.emissiveIntensity = Math.max(m.emissiveIntensity || 0, brightnessDefault);
+                }
+
+                m.needsUpdate = true;
+              } catch (e) {
+                // fallback: ensure material updates
+                m.needsUpdate = true;
+              }
               materialsModified++;
             }
           });
         } else {
           if ("map" in newMat) {
             newMat.map = texture;
-            newMat.needsUpdate = true;
+            try {
+              if (newMat.map) newMat.map.encoding = THREE.sRGBEncoding;
+              if (texture) texture.encoding = THREE.sRGBEncoding;
+              if (newMat.color) newMat.color.set(0xffffff);
+              else newMat.color = new THREE.Color(0xffffff);
+              newMat.emissiveMap = texture;
+              newMat.emissive = new THREE.Color(0xffffff);
+              newMat.emissiveIntensity = Math.max(newMat.emissiveIntensity || 0, brightnessDefault);
+              newMat.needsUpdate = true;
+            } catch (e) {
+              newMat.needsUpdate = true;
+            }
             materialsModified++;
           }
         }
@@ -1374,14 +1443,37 @@ export function Experience({
               newMat.forEach((m) => {
                 if (m && "map" in m) {
                   m.map = texture;
-                  m.needsUpdate = true;
+                  try {
+                    if (m.map) m.map.encoding = THREE.sRGBEncoding;
+                    if (texture) texture.encoding = THREE.sRGBEncoding;
+                    if (m.color) m.color.set(0xffffff);
+                    else m.color = new THREE.Color(0xffffff);
+                    m.emissiveMap = texture;
+                    m.emissive = new THREE.Color(0xffffff);
+                    m.emissiveIntensity = Math.max(m.emissiveIntensity || 0, mappingConfig.brightness !== undefined ? mappingConfig.brightness : 0.18);
+                    m.needsUpdate = true;
+                  } catch (e) {
+                    m.needsUpdate = true;
+                  }
                   materialsModified++;
                 }
               });
             } else {
               if ("map" in newMat) {
-                newMat.map = texture;
-                newMat.needsUpdate = true;
+                try {
+                  newMat.map = texture;
+                  if (newMat.map) newMat.map.encoding = THREE.sRGBEncoding;
+                  if (texture) texture.encoding = THREE.sRGBEncoding;
+                  if (newMat.color) newMat.color.set(0xffffff);
+                  else newMat.color = new THREE.Color(0xffffff);
+                  newMat.emissiveMap = texture;
+                  newMat.emissive = new THREE.Color(0xffffff);
+                  newMat.emissiveIntensity = Math.max(newMat.emissiveIntensity || 0, mappingConfig.brightness !== undefined ? mappingConfig.brightness : 0.18);
+                  newMat.needsUpdate = true;
+                } catch (e) {
+                  newMat.map = texture;
+                  newMat.needsUpdate = true;
+                }
                 materialsModified++;
               }
             }
@@ -2404,45 +2496,80 @@ export function Experience({
   {/* Studio lighting (universal product setup). When `isPerformanceMode` is true we
       reduce or skip heavy lighting/features to keep interaction smooth. */}
   {/* Always include HDRI environment so materials can sample it; lower intensity in perf mode */}
-  <Environment files="./environment.hdr" background={false} intensity={isPerformanceMode ? 0.25 : 0.7} />
+  <Environment files="./environment.hdr" background={false} intensity={isPerformanceMode ? 0.25 : Math.max(0.9, envIntensity)} />
 
-  <color attach="background" args={['#dddcdc']} />
+  <color attach="background" args={['#e9e9e9']} />
 
-  {/* Subtle hemisphere for fill */}
-  <hemisphereLight skyColor={0xffffff} groundColor={0x444444} intensity={0.25} />
+  {/* Stronger hemisphere for better fill */}
+  <hemisphereLight skyColor={0xffffff} groundColor={0x888888} intensity={0.6} />
 
-  {/* Low ambient to lift shadows slightly */}
-  <ambientLight intensity={0.12} />
+  {/* Slightly higher ambient to lift darker faces */}
+  <ambientLight intensity={0.25} />
 
   {/* Key light: soft, warm directional light */}
   <directionalLight
     name="KeyLight"
     position={[4.5, 6, 5]}
-    intensity={1.5}
+    intensity={1.1}
     castShadow={true}
     shadow-mapSize-width={2048}
     shadow-mapSize-height={2048}
-    shadow-radius={8}
-    shadow-bias={-0.0001}
+    shadow-radius={10}
+    shadow-bias={-0.0002}
     shadow-camera-near={1}
-    shadow-camera-far={30}
-    shadow-camera-left={-10}
-    shadow-camera-right={10}
-    shadow-camera-top={10}
-    shadow-camera-bottom={-10}
+    shadow-camera-far={40}
+    shadow-camera-left={-12}
+    shadow-camera-right={12}
+    shadow-camera-top={12}
+    shadow-camera-bottom={-12}
   />
+
+  {/* Fill and rim lights to reduce harsh side darkness */}
   <directionalLight
     name="FillLight"
-    position={[-4.5, 3.5, -2.5]}
-    intensity={0.85}
-    color={0xc6e0ff}
+    position={[-5.0, 4.0, -3.5]}
+    intensity={1.0}
+    color={0xddeeff}
     castShadow={false}
   />
   <directionalLight
     name="RimLight"
-    position={[0, 5.5, -6]}
-    intensity={0.65}
-    color={0xfff1e6}
+    position={[0, 6.0, -6]}
+    intensity={0.9}
+    color={0xfff6e8}
+    castShadow={false}
+  />
+
+  {/* Additional left-side soft fills to even out lighting */}
+  <pointLight
+    name="LeftFillPoint"
+    position={[-6, 2.5, 0]}
+    intensity={1.75}
+    distance={12}
+    decay={2}
+    color={0xf0f7ff}
+    castShadow={false}
+  />
+
+  <spotLight
+    name="LeftSoftSpot"
+    position={[-4.5, 3.5, 2.5]}
+    intensity={1.0}
+    angle={Math.PI / 3}
+    penumbra={0.7}
+    distance={14}
+    color={0xffffff}
+    castShadow={false}
+  />
+
+  {/* Gentle camera-front fill to reduce remaining side contrast */}
+  <pointLight
+    name="FrontFill"
+    position={[0, 2.2, 6]}
+    intensity={0.45}
+    distance={16}
+    decay={2}
+    color={0xfffbf5}
     castShadow={false}
   />
 

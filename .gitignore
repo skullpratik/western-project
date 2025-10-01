@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Do not commit models, HDRIs, textures or generated configs
+/public/models/
+/public/configs/
+/public/config-textures/
+/public/texture/
+
+# Common large binary file types used for models and textures
+*.glb
+*.gltf
+*.hdr
+*.exr
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bin
