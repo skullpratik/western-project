@@ -2,8 +2,16 @@ import React from 'react';
 import '../Interface.css';
 import { dlog } from '../../../utils/logger';
 
-export const PresetWidget = ({ config, applyRequest, api }) => {
-  const presets = Array.isArray(config.presets) ? config.presets : [];
+export const PresetWidget = ({ config, applyRequest, api, userPermissions }) => {
+  const allPresets = Array.isArray(config.presets) ? config.presets : [];
+  const presetAccess = userPermissions?.presetAccess;
+  const presets = Array.isArray(allPresets)
+    ? allPresets.filter(p => {
+        if (!presetAccess || Object.keys(presetAccess).length === 0) return true; // no per-preset restrictions
+        if (!p || !p.id) return false;
+        return !!presetAccess[p.id];
+      })
+    : [];
 
   if (!presets.length) {
     return (

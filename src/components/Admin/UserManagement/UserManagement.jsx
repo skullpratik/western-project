@@ -15,9 +15,14 @@ const UserManagement = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'user' });
   const [createdPassword, setCreatedPassword] = useState('');
+  const [createErrors, setCreateErrors] = useState({});
+  const [creating, setCreating] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState('');
 
   useEffect(() => {
     fetchUsers();
+    loadModelPresets();
   }, []);
 
   const fetchUsers = async () => {
@@ -64,13 +69,57 @@ const UserManagement = () => {
       imageDownloadQualities: ['average']
     };
 
-    const completePermissions = { ...defaultPermissions, ...user.permissions };
+    const completePermissions = { ...defaultPermissions, ...user.permissions, presetAccess: user.permissions?.presetAccess || {} };
 
     setEditingUser({
       ...user,
       permissions: completePermissions
     });
     setShowEditModal(true);
+    // load available presets so admin can toggle them
+    setTimeout(() => loadModelPresets(), 10);
+  };
+
+  // Presets for the currently-selected model (used to render per-preset controls)
+  const [modelPresets, setModelPresets] = useState([]);
+
+  // Load presets from server for the currently-selected model (uses same /api/models list as MainApp)
+  const loadModelPresets = async () => {
+    try {
+      const selectedModel = localStorage.getItem('selectedModel');
+      if (!selectedModel) return setModelPresets([]);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/models`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!res.ok) return setModelPresets([]);
+      const models = await res.json();
+      const found = models.find(m => String(m.name) === String(selectedModel));
+      if (!found) return setModelPresets([]);
+      const cfgUrl = found.configUrl;
+      if (!cfgUrl) return setModelPresets([]);
+      const fullUrl = cfgUrl.startsWith('http') ? cfgUrl : `${API_BASE_URL}${cfgUrl.startsWith('/') ? '' : '/'}${cfgUrl}`;
+      const cfgRes = await fetch(fullUrl);
+      if (!cfgRes.ok) return setModelPresets([]);
+      const json = await cfgRes.json();
+      const presets = Array.isArray(json.presets) ? json.presets : [];
+      setModelPresets(presets);
+      // If editingUser is open and presetAccess wasn't initialized, default to allowing all
+      setEditingUser(prev => {
+        if (!prev) return prev;
+        const currentAccess = prev.permissions?.presetAccess;
+        if (currentAccess && Object.keys(currentAccess).length) return prev; // already set
+        const map = {};
+        presets.forEach(p => { if (p.id) map[p.id] = true; });
+        return { ...prev, permissions: { ...prev.permissions, presetAccess: map } };
+      });
+    } catch (err) {
+      console.warn('Failed to load model presets for admin UI', err);
+      setModelPresets([]);
+    }
   };
 
   const handleUpdateUser = async (e) => {
@@ -100,6 +149,20 @@ const UserManagement = () => {
       console.error('Error updating user:', error);
       setError('Failed to update user');
     }
+  };
+
+  // Toggle a preset for editingUser.permissions.presetAccess
+  const handlePresetToggle = (presetId, checked) => {
+    setEditingUser(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        presetAccess: {
+          ...(prev.permissions?.presetAccess || {}),
+          [presetId]: checked
+        }
+      }
+    }));
   };
 
   const handleToggleActive = async (userId) => {
@@ -176,6 +239,76 @@ const UserManagement = () => {
         }
       };
     });
+  };
+
+  // Create user handler (moved out of inline form for clarity)
+  const validateCreateForm = (user) => {
+    const errs = {};
+    if (!user.name || user.name.trim().length < 2) errs.name = 'Please enter a full name (min 2 characters).';
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!user.email || !emailRe.test(user.email)) errs.email = 'Please enter a valid email address.';
+    if (!user.password || user.password.length < 8) errs.password = 'Password must be at least 8 characters.';
+    return errs;
+  };
+
+  const passwordStrength = (pwd) => {
+    if (!pwd) return { score: 0, label: 'Empty' };
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[a-z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^A-Za-z0-9]/.test(pwd)) score++;
+    const labels = ['Very weak', 'Weak', 'Medium', 'Good', 'Strong', 'Excellent'];
+    return { score, label: labels[Math.min(score, labels.length - 1)] };
+  };
+
+  const generatePassword = () => {
+    // create a reasonably strong password
+    const part = () => Math.random().toString(36).slice(2, 8);
+    const special = '!@#$%^&*()_+~'.charAt(Math.floor(Math.random() * 11));
+    const pwd = (part() + part() + special + String.fromCharCode(65 + Math.floor(Math.random() * 26))).slice(0, 14);
+    setNewUser(prev => ({ ...prev, password: pwd }));
+    setShowPassword(true);
+    setCreateErrors(prev => ({ ...prev, password: undefined }));
+    return pwd;
+  };
+
+  const handleCreateSubmit = async (e) => {
+    e.preventDefault();
+    setCreateSuccess('');
+    const errs = validateCreateForm(newUser);
+    setCreateErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    setCreating(true);
+    try {
+      const token = localStorage.getItem('token');
+      const resp = await fetch(`${API_BASE_URL}/api/admin-dashboard/users`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newUser)
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to create user');
+      }
+      const data = await resp.json();
+      const shownPwd = newUser.password || '';
+      setCreatedPassword(shownPwd);
+      setCreateSuccess('User created successfully');
+      await fetchUsers();
+      // reset form but keep createdPassword visible for copy
+      setNewUser({ name: '', email: '', password: '', role: 'user' });
+      setShowCreateModal(false);
+    } catch (err) {
+      console.error('Create user error', err);
+      setCreateErrors({ form: err.message || 'Failed to create user' });
+    } finally {
+      setCreating(false);
+    }
   };
 
   const grantAll = () => {
@@ -343,6 +476,25 @@ const UserManagement = () => {
                 </div>
               </div>
 
+              {/* Per-preset controls (Coke/Pepsi etc) */}
+              {modelPresets.length > 0 && (
+                <div className="kt-card" style={{boxShadow:'none', border:'1px dashed var(--kt-border)'}}>
+                  <div className="kt-card-header" style={{marginBottom:12}}>Presets Access</div>
+                  <div style={{display:'grid', gap:10, gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))'}}>
+                    {modelPresets.map(p => (
+                      <label key={p.id} style={{display:'flex', gap:6, alignItems:'center', fontSize:12, background:'var(--kt-surface-alt)', padding:'6px 8px', borderRadius:6, border:'1px solid var(--kt-border)'}}>
+                        <input
+                          type="checkbox"
+                          checked={!!editingUser.permissions?.presetAccess?.[p.id]}
+                          onChange={(e) => handlePresetToggle(p.id, e.target.checked)}
+                        />
+                        {p.label || p.id}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="kt-card" style={{boxShadow:'none', border:'1px dashed var(--kt-border)'}}>
                 <div className="kt-card-header" style={{marginBottom:12}}>Image Download Qualities</div>
                 <div style={{display:'grid', gap:10, gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))'}}>
@@ -369,66 +521,60 @@ const UserManagement = () => {
       )}
       {showCreateModal && (
         <div className="modal-overlay" style={{position:'fixed', inset:0, background:'rgba(15,23,42,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'60px 20px', zIndex:200}}>
-          <div className="kt-card" style={{width:'min(520px,100%)'}}>
+          <div className="kt-card" style={{width:'min(620px,100%)'}}>
             <div className="flex" style={{justifyContent:'space-between', alignItems:'center'}}>
               <div className="kt-card-header" style={{marginBottom:0}}>Create User</div>
-              <button onClick={() => setShowCreateModal(false)} style={{border:'none', background:'transparent', fontSize:24, lineHeight:1, cursor:'pointer'}}>×</button>
+              <button aria-label="Close create user" onClick={() => setShowCreateModal(false)} style={{border:'none', background:'transparent', fontSize:24, lineHeight:1, cursor:'pointer'}}>×</button>
             </div>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const token = localStorage.getItem('token');
-                const resp = await fetch(`${API_BASE_URL}/api/admin-dashboard/users`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify(newUser)
-                });
-                if (!resp.ok) {
-                  const err = await resp.json().catch(() => ({}));
-                  throw new Error(err.message || 'Failed to create user');
-                }
-                const data = await resp.json();
-                // capture password so admin can copy it for the user
-                setCreatedPassword(newUser.password || '');
-                // refresh list
-                await fetchUsers();
-                setShowCreateModal(false);
-                setNewUser({ name: '', email: '', password: '', role: 'user' });
-              } catch (err) {
-                console.error('Create user error', err);
-                setError(err.message || 'Failed to create user');
-              }
-            }} className="flex flex-col gap-12" style={{marginTop:12}}>
-              <div style={{display:'grid', gap:8}}>
-                <label style={{fontSize:12, fontWeight:600}}>Name</label>
-                <input required value={newUser.name} onChange={(e) => setNewUser(prev => ({ ...prev, name: e.target.value }))} />
+            <form onSubmit={handleCreateSubmit} className="flex flex-col gap-12" style={{marginTop:12}} noValidate>
+              <div style={{display:'grid', gap:10, gridTemplateColumns:'1fr 1fr'}}>
+                <div style={{display:'flex', flexDirection:'column'}}>
+                  <label style={{fontSize:12, fontWeight:600}}>Name</label>
+                  <input aria-label="Full name" autoFocus value={newUser.name} onChange={(e) => setNewUser(prev => ({ ...prev, name: e.target.value }))} />
+                  {createErrors.name && <div style={{color:'var(--kt-danger)', fontSize:12, marginTop:6}}>{createErrors.name}</div>}
+                </div>
 
-                <label style={{fontSize:12, fontWeight:600, marginTop:8}}>Email</label>
-                <input required type="email" value={newUser.email} onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))} />
+                <div style={{display:'flex', flexDirection:'column'}}>
+                  <label style={{fontSize:12, fontWeight:600}}>Email</label>
+                  <input aria-label="Email address" type="email" value={newUser.email} onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))} />
+                  {createErrors.email && <div style={{color:'var(--kt-danger)', fontSize:12, marginTop:6}}>{createErrors.email}</div>}
+                </div>
+              </div>
 
-                <label style={{fontSize:12, fontWeight:600, marginTop:8}}>Password</label>
-                <input required type="password" value={newUser.password} onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))} />
+              <div style={{display:'grid', gap:8, gridTemplateColumns:'1fr'}}>
+                <label style={{fontSize:12, fontWeight:600}}>Password</label>
+                <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                  <input aria-label="Password" type={showPassword ? 'text' : 'password'} value={newUser.password} onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))} style={{flex:1}} />
+                  <button type="button" className="kt-btn outline" onClick={() => setShowPassword(s => !s)} aria-pressed={showPassword}>{showPassword ? 'Hide' : 'Show'}</button>
+                  <button type="button" className="kt-btn" onClick={() => generatePassword()}>Generate</button>
+                </div>
+                {createErrors.password && <div style={{color:'var(--kt-danger)', fontSize:12}}>{createErrors.password}</div>}
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <div style={{fontSize:12, color:'var(--kt-text-soft)'}}>Strength: {passwordStrength(newUser.password).label}</div>
+                  <div style={{width:120, height:8, background:'var(--kt-surface)', borderRadius:6, overflow:'hidden'}}>
+                    <div style={{height:'100%', width:`${(passwordStrength(newUser.password).score/5)*100}%`, background: passwordStrength(newUser.password).score >=4 ? 'var(--kt-success)' : 'var(--kt-primary)'}} />
+                  </div>
+                </div>
+              </div>
 
-                <label style={{fontSize:12, fontWeight:600, marginTop:8}}>Role</label>
+              <div style={{display:'flex', gap:12, alignItems:'center'}}>
+                <label style={{fontSize:12, fontWeight:600}}>Role</label>
                 <select value={newUser.role} onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value }))}>
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>
+                <div style={{marginLeft:'auto'}}>
+                  {createErrors.form && <div style={{color:'var(--kt-danger)', fontSize:13, marginRight:12}}>{createErrors.form}</div>}
+                  {createSuccess && <div style={{color:'var(--kt-success)', fontSize:13, marginRight:12}}>{createSuccess}</div>}
+                </div>
               </div>
 
               <div className="flex" style={{justifyContent:'flex-end', gap:12}}>
-                <button type="button" className="kt-btn outline" onClick={() => setShowCreateModal(false)}>Cancel</button>
-                <button type="button" className="kt-btn" onClick={() => {
-                  // generate a strong password
-                  const pwd = Math.random().toString(36).slice(-10) + Math.random().toString(36).toUpperCase().slice(-2) + '!1';
-                  setNewUser(prev => ({ ...prev, password: pwd }));
-                }}>Generate password</button>
-                <button type="submit" className="kt-btn primary">Create</button>
+                <button type="button" className="kt-btn outline" onClick={() => { setShowCreateModal(false); setCreateErrors({}); setNewUser({ name: '', email: '', password: '', role: 'user' }); }}>Cancel</button>
+                <button type="submit" className="kt-btn primary" disabled={creating}>{creating ? 'Creating…' : 'Create user'}</button>
               </div>
             </form>
+
             {createdPassword && (
               <div style={{marginTop:12, padding:10, borderTop:'1px dashed var(--kt-border)', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <div>

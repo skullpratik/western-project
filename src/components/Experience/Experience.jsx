@@ -1,6 +1,7 @@
 // src/components/Experience/Experience.jsx
 import * as THREE from "three";
 import React, { Suspense, useRef, useEffect, useState, useCallback } from "react";
+import { extend } from '@react-three/fiber';
 import { useFrame } from '@react-three/fiber';
 import { useThree } from "@react-three/fiber";
 import { Environment, OrbitControls, useGLTF, Html, ContactShadows } from "@react-three/drei";
@@ -15,6 +16,9 @@ import {
   getModelCenter,
   getModelSize 
 } from "../../utils/modelPositioning";
+
+// Register MeshShadowMaterial at module scope so JSX can use <meshShadowMaterial />
+try { extend({ MeshShadowMaterial: THREE.MeshShadowMaterial }); } catch (e) { /* ignore if already extended */ }
 
 export function Experience({
   modelName,
@@ -46,6 +50,15 @@ export function Experience({
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL LOGIC OR EARLY RETURNS
   const loggedKeysRef = useRef({});
   const { camera, gl, scene: r3fScene } = useThree();
+
+
+  // Enable renderer shadows
+  useEffect(() => {
+    if (gl) {
+      gl.shadowMap.enabled = true;
+      gl.shadowMap.type = THREE.PCFSoftShadowMap;
+    }
+  }, [gl]);
   const { invalidate } = useThree();
   const orbitControlsRef = useRef();
   const modelGroupRef = useRef();
@@ -96,6 +109,45 @@ export function Experience({
     findInteractiveObjectName,
     getInteractionType: interactionsGetInteractionType
   } = useInteractions(allObjects, config);
+
+  // Safe toggle wrapper that enforces user permissions before invoking interaction handlers
+  const safeTogglePart = useCallback((name, type) => {
+    try {
+      const resolvedType = (type && type !== 'auto') ? type : (interactionsGetInteractionType ? interactionsGetInteractionType(name) : null);
+      // If resolvedType still null, attempt to infer from name
+      const t = resolvedType || (String(name || '').toLowerCase().includes('door') ? 'door' : (String(name || '').toLowerCase().includes('draw') ? 'drawer' : null));
+      if (t === 'door') {
+        if (!userPermissions?.doorToggles) {
+          if (debug) console.warn(`🔒 Door toggle blocked by permissions for ${name}`);
+          return;
+        }
+      } else if (t === 'drawer') {
+        if (!userPermissions?.drawerToggles) {
+          if (debug) console.warn(`🔒 Drawer toggle blocked by permissions for ${name}`);
+          return;
+        }
+      } else {
+        // For unknown types, require at least one of the general edit permissions
+        if (!(userPermissions?.doorToggles || userPermissions?.drawerToggles || userPermissions?.canEdit)) {
+          if (debug) console.warn(`🔒 Interaction blocked by permissions for ${name} (unknown type)`);
+          return;
+        }
+      }
+
+      // If allowed, call the underlying interaction
+      if (typeof interactionsTogglePart === 'function') {
+        interactionsTogglePart(name, type);
+      } else if (t === 'door' && typeof toggleDoor === 'function') {
+        toggleDoor(name);
+      } else if (t === 'drawer' && typeof toggleDrawer === 'function') {
+        toggleDrawer(name);
+      } else {
+        if (debug) console.warn('⚠️ No toggle handler available after permission check for', name);
+      }
+    } catch (err) {
+      console.error('❌ safeTogglePart caught error:', err);
+    }
+  }, [interactionsTogglePart, interactionsGetInteractionType, toggleDoor, toggleDrawer, userPermissions, debug]);
 
   // Activity logging helper
   const logInteraction = useCallback(async (action, details = {}) => {
@@ -225,23 +277,27 @@ export function Experience({
   useEffect(() => {
     if (!mainScene) return;
     mainScene.traverse((child) => {
-      if (child.isMesh && child.material) {
-        const mats = Array.isArray(child.material) ? child.material : [child.material];
-        mats.forEach((mat) => {
-          if (!mat) return;
-          // Clamp envMapIntensity to a low value to avoid glowing effect
-          mat.envMapIntensity = 0;
-          // Remove any emissive intensity
-          mat.emissiveIntensity = 0;
-          // Remove any custom glow logic
-          if (mat.emissive) mat.emissive.set(0x000000);
-          // Optionally, clamp roughness/metalness to reasonable defaults
-          if (forceGlossy) {
-            mat.roughness = 0.08;
-            mat.metalness = 0.95;
-          }
-          mat.needsUpdate = true;
-        });
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        if (child.material) {
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((mat) => {
+            if (!mat) return;
+            // Clamp envMapIntensity to a low value to avoid glowing effect
+            mat.envMapIntensity = 0;
+            // Remove any emissive intensity
+            mat.emissiveIntensity = 0;
+            // Remove any custom glow logic
+            if (mat.emissive) mat.emissive.set(0x000000);
+            // Optionally, clamp roughness/metalness to reasonable defaults
+            if (forceGlossy) {
+              mat.roughness = 0.08;
+              mat.metalness = 0.95;
+            }
+            mat.needsUpdate = true;
+          });
+        }
       }
     });
   }, [mainScene, forceGlossy]);
@@ -432,13 +488,14 @@ export function Experience({
   useEffect(() => {
     try {
       const isPreview = user && typeof user.name === 'string' && user.name.includes('(Preview)');
-      const allowRotate = (userPermissions && userPermissions.canRotate) || isPreview || true;
+      // Only allow rotate/pan/zoom when explicitly permitted, except for preview users
+      const allowRotate = isPreview ? true : (userPermissions?.canRotate ?? false);
       if (orbitControlsRef.current) {
         // Set both generic and specific flags
         orbitControlsRef.current.enabled = allowRotate;
         orbitControlsRef.current.enableRotate = allowRotate;
-        orbitControlsRef.current.enablePan = userPermissions?.canPan ?? true;
-        orbitControlsRef.current.enableZoom = userPermissions?.canZoom ?? true;
+        orbitControlsRef.current.enablePan = userPermissions?.canPan ?? false;
+        orbitControlsRef.current.enableZoom = userPermissions?.canZoom ?? false;
         if (debug) console.log('🔐 OrbitControls forced state:', {
           enabled: orbitControlsRef.current.enabled,
           enableRotate: orbitControlsRef.current.enableRotate,
@@ -2290,24 +2347,8 @@ export function Experience({
         console.log(`✅ Found interactive object: ${interactiveObjectName}`);
         console.log(`🎬 Calling togglePart for: ${interactiveObjectName}`);
       }
-      // Call the generic togglePart (from hook) if available - this should animate via GSAP
-      if (typeof togglePart === 'function') {
-        try {
-          togglePart(interactiveObjectName, "auto");
-        } catch (err) {
-          console.error('❌ togglePart threw error:', err);
-        }
-      } else {
-        // Fallback: call specific toggles directly
-        const t = getInteractionType ? getInteractionType(interactiveObjectName) : null;
-        if (t === 'door' && typeof toggleDoor === 'function') {
-          toggleDoor(interactiveObjectName);
-        } else if (t === 'drawer' && typeof toggleDrawer === 'function') {
-          toggleDrawer(interactiveObjectName);
-        } else {
-          console.warn('⚠️ No toggle function available for', interactiveObjectName);
-        }
-      }
+      // Call the guarded toggle that checks permissions before invoking the interaction
+      safeTogglePart(interactiveObjectName, 'auto');
       e.stopPropagation();
     } else {
       // If the quick parent-hierarchy lookup failed, run a fallback broad raycast
@@ -2327,14 +2368,8 @@ export function Experience({
             const mapped = findInteractiveObjectName(hit);
             if (mapped) {
               if (debug) console.log('✅ Fallback mapped to interactive object:', mapped);
-              if (typeof togglePart === 'function') {
-                togglePart(mapped, 'auto');
-              } else {
-                const t = getInteractionType ? getInteractionType(mapped) : null;
-                if (t === 'door' && typeof toggleDoor === 'function') toggleDoor(mapped);
-                else if (t === 'drawer' && typeof toggleDrawer === 'function') toggleDrawer(mapped);
-                else console.warn('⚠️ No toggle function available for', mapped);
-              }
+              // Use the guarded toggler so admin permissions are enforced
+              safeTogglePart(mapped, 'auto');
               e.stopPropagation();
               return;
             } else {
@@ -2389,6 +2424,12 @@ export function Experience({
     shadow-mapSize-height={2048}
     shadow-radius={8}
     shadow-bias={-0.0001}
+    shadow-camera-near={1}
+    shadow-camera-far={30}
+    shadow-camera-left={-10}
+    shadow-camera-right={10}
+    shadow-camera-top={10}
+    shadow-camera-bottom={-10}
   />
   <directionalLight
     name="FillLight"
@@ -2407,7 +2448,9 @@ export function Experience({
 
   {/* ContactShadows removed as requested */}
 
-      <group ref={modelGroupRef} onPointerDown={handlePointerDown}>
+      {/* No ground plane added — models themselves will receiveShadow when available. */}
+
+  <group ref={modelGroupRef} onPointerDown={handlePointerDown} castShadow receiveShadow>
         {/* Render main model scene */}
         {mainScene && (
           <>
@@ -2461,4 +2504,4 @@ export function Experience({
   );
 }
 
-export default Experience;
+export default Experience

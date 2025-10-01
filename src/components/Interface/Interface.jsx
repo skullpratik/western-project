@@ -229,6 +229,9 @@ export function Interface({
 
     // Extended mapping: map many widget type variants to backend permission keys
     const permissionMap = {
+      preset: 'canEdit',
+      presets: 'canEdit',
+      presetwidget: 'canEdit',
       doorpresets: 'doorPresets',
       doorpreset: 'doorPresets',
       doorpresetwidget: 'doorPresets',
@@ -260,6 +263,7 @@ export function Interface({
 
     // fallback defaults
     if (normalized.includes('door')) return 'doorToggles';
+    if (normalized.includes('preset')) return 'canEdit';
     if (normalized.includes('texture')) return 'textureWidget';
     if (normalized.includes('light')) return 'lightWidget';
     return 'textureWidget';
