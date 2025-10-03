@@ -170,13 +170,6 @@ export function ActivityLog({ user: propUser, userId: propUserId = null, onClose
         {/* If viewing a specific user's activity, allow admin to delete those logs */}
         {user.role === 'admin' && selectedUserId && (
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button 
-              className="kt-btn primary sm" 
-              onClick={() => fetchUserConfigs(selectedUserId)}
-              disabled={loadingConfigs}
-            >
-              {loadingConfigs ? 'Loading...' : 'View Saved Config'}
-            </button>
             <button className="kt-btn danger sm" onClick={async () => {
               if (!window.confirm('Permanently delete all activity logs for this user?')) return;
               try {

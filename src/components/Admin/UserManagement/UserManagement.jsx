@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './UserManagement.css';
 import { ActivityLog } from '../../ActivityLog/ActivityLog';
+import SavedConfigsList from '../../Interface/SavedConfigsList';
 
 const API_BASE_URL = 'http://localhost:5000';
 
@@ -23,6 +24,8 @@ const UserManagement = () => {
   const [transferSourceUser, setTransferSourceUser] = useState(null);
   const [transferTargetUserId, setTransferTargetUserId] = useState('');
   const [configCounts, setConfigCounts] = useState({});
+  const [showUserConfigs, setShowUserConfigs] = useState(false);
+  const [configsUserId, setConfigsUserId] = useState(null);
   const [debugMessage, setDebugMessage] = useState('');
 
   useEffect(() => {
@@ -479,7 +482,11 @@ const UserManagement = () => {
                   {user.name}
                 </td>
                 <td>{user.email}</td>
-                <td style={{textAlign:'center'}}>
+                <td style={{textAlign:'center', cursor: 'pointer'}} onClick={() => {
+                  // Open saved configs list for this user
+                  setConfigsUserId(user._id);
+                  setShowUserConfigs(true);
+                }} title="Click to view saved configurations">
                   <span className="badge" style={{background:'transparent', color:'var(--kt-text)'}}>
                     {typeof configCounts[user._id] === 'number' ? configCounts[user._id] : '-'}
                   </span>
@@ -533,6 +540,21 @@ const UserManagement = () => {
           </div>
         </div>
       )}
+
+      {/* Saved configs modal for admin viewing another user's configs */}
+      <SavedConfigsList
+        isOpen={showUserConfigs}
+        onClose={() => { setShowUserConfigs(false); setConfigsUserId(null); }}
+        onLoad={(configData) => {
+          // Optionally load the configuration into the main viewer (if the app supports it)
+          try {
+            // Some apps expect onLoad to be async - keep this minimal
+          } catch (e) {
+            console.warn('onLoad handler for SavedConfigsList not implemented', e);
+          }
+        }}
+        userId={configsUserId}
+      />
 
       {showEditModal && editingUser && (
         <div className="modal-overlay" style={{position:'fixed', inset:0, background:'rgba(15,23,42,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'60px 20px', zIndex:200}}>

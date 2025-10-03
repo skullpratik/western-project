@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './SavedConfigsList.css';
 
-const SavedConfigsList = ({ isOpen, onClose, onLoad, modelName }) => {
+const SavedConfigsList = ({ isOpen, onClose, onLoad, modelName, userId }) => {
   const [configs, setConfigs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedConfig, setSelectedConfig] = useState(null);
@@ -10,15 +10,18 @@ const SavedConfigsList = ({ isOpen, onClose, onLoad, modelName }) => {
     if (isOpen) {
       fetchConfigs();
     }
-  }, [isOpen, modelName]);
+  }, [isOpen, modelName, userId]);
 
   const fetchConfigs = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const url = modelName 
-        ? `http://localhost:5000/api/configs/user?modelName=${modelName}`
-        : 'http://localhost:5000/api/configs/user';
+      // If userId is provided and we're an admin, fetch via admin endpoint for that user
+      const url = userId
+        ? `http://localhost:5000/api/admin/user-configs/${userId}${modelName ? `?modelName=${encodeURIComponent(modelName)}` : ''}`
+        : modelName
+          ? `http://localhost:5000/api/configs/user?modelName=${encodeURIComponent(modelName)}`
+          : 'http://localhost:5000/api/configs/user';
         
       const response = await fetch(url, {
         headers: {
