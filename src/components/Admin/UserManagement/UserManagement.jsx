@@ -463,14 +463,17 @@ const UserManagement = () => {
         <table className="kt-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Saved Configs</th>
-              <th>Role</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th>Actions</th>
-            </tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>
+                  Saved Configs
+                  <div style={{fontSize:11, color:'var(--kt-text-soft)', marginTop:4}}>Click the number to view</div>
+                </th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
           </thead>
           <tbody>
             {users.map(user => (
@@ -482,14 +485,24 @@ const UserManagement = () => {
                   {user.name}
                 </td>
                 <td>{user.email}</td>
-                <td style={{textAlign:'center', cursor: 'pointer'}} onClick={() => {
-                  // Open saved configs list for this user
-                  setConfigsUserId(user._id);
-                  setShowUserConfigs(true);
-                }} title="Click to view saved configurations">
-                  <span className="badge" style={{background:'transparent', color:'var(--kt-text)'}}>
-                    {typeof configCounts[user._id] === 'number' ? configCounts[user._id] : '-'}
-                  </span>
+                <td style={{textAlign:'center'}}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    title="Click to view saved configurations"
+                    onClick={() => { setConfigsUserId(user._id); setShowUserConfigs(true); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setConfigsUserId(user._id); setShowUserConfigs(true); } }}
+                    style={{display:'inline-flex', alignItems:'center', gap:8, cursor: typeof configCounts[user._id] === 'number' && configCounts[user._id] > 0 ? 'pointer' : 'default', padding:'6px 8px', borderRadius:6}}
+                  >
+                    {typeof configCounts[user._id] === 'number' && configCounts[user._id] > 0 ? (
+                      <>
+                        <span style={{fontSize:14, opacity:0.95}}>📋</span>
+                        <span style={{textDecoration:'underline', color:'var(--kt-primary)', fontWeight:600}}>{configCounts[user._id]}</span>
+                      </>
+                    ) : (
+                      <span className="badge" style={{background:'transparent', color:'var(--kt-text)'}}>-</span>
+                    )}
+                  </div>
                 </td>
                 <td>
                   <span className="badge primary" style={{textTransform:'capitalize'}}>{user.role}</span>
