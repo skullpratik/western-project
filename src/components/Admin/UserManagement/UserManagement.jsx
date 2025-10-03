@@ -19,6 +19,11 @@ const UserManagement = () => {
   const [creating, setCreating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [createSuccess, setCreateSuccess] = useState('');
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferSourceUser, setTransferSourceUser] = useState(null);
+  const [transferTargetUserId, setTransferTargetUserId] = useState('');
+  const [configCounts, setConfigCounts] = useState({});
+  const [debugMessage, setDebugMessage] = useState('');
 
   useEffect(() => {
     fetchUsers();
@@ -42,6 +47,27 @@ const UserManagement = () => {
 
       const data = await response.json();
       setUsers(data);
+      // Fetch saved-config counts for each user (show in table)
+      (async () => {
+        try {
+          const counts = {};
+          await Promise.all(data.map(async (u) => {
+            try {
+              const r = await fetch(`${API_BASE_URL}/api/admin/user-configs/${u._id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (!r.ok) { counts[u._id] = 0; return; }
+              const arr = await r.json();
+              counts[u._id] = Array.isArray(arr) ? arr.length : 0;
+            } catch (e) {
+              counts[u._id] = 0;
+            }
+          }));
+          setConfigCounts(counts);
+        } catch (e) {
+          console.warn('Failed to fetch config counts', e);
+        }
+      })();
     } catch (error) {
       console.error('Error fetching users:', error);
       setError('Failed to fetch users');
@@ -190,28 +216,79 @@ const UserManagement = () => {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) {
-      return;
-    }
-
     try {
       const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/api/admin-dashboard/users/${userId}`, {
+
+      // Query the admin endpoint that returns the user's saved-widget configs array
+      const cfgResp = await fetch(`${API_BASE_URL}/api/admin/user-configs/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!cfgResp.ok) throw new Error('Failed to query user saved configurations');
+      const configs = await cfgResp.json();
+      const count = Array.isArray(configs) ? configs.length : 0;
+  console.log('Delete flow:', { userId, count, configsSample: configs && configs.slice ? configs.slice(0,2) : configs });
+  setDebugMessage(`Delete flow for ${userId}: count=${count}`);
+
+      if (count === 0) {
+        // No saved configs - ask confirmation and delete immediately
+        if (!window.confirm('This user has no saved configurations. Delete account?')) return;
+        const delResp = await fetch(`${API_BASE_URL}/api/admin-dashboard/users/${userId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!delResp.ok) {
+          const err = await delResp.json().catch(() => ({}));
+          throw new Error(err.message || 'Failed to delete user');
+        }
+        setUsers(prev => prev.filter(u => u._id !== userId));
+        return;
+      }
+
+      // Has configs - open transfer modal (do not show browser confirm yet)
+      const src = users.find(u => u._id === userId) || null;
+      console.log('Transfer source user resolved:', src);
+      setDebugMessage(`Transfer modal should open for ${src ? src.name : 'null'}`);
+      setTransferSourceUser(src);
+      setTransferTargetUserId('');
+      setShowTransferModal(true);
+    } catch (error) {
+      console.error('Error in delete flow:', error);
+      setError(error.message || 'Failed to delete user');
+    }
+  };
+
+  const confirmDeleteWithTransfer = async () => {
+    if (!transferSourceUser) { setShowTransferModal(false); return; }
+    // Ask final confirmation here so admin saw the transfer modal first
+    if (!window.confirm('Are you sure you want to delete this user now? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const url = transferTargetUserId
+        ? `${API_BASE_URL}/api/admin-dashboard/users/${transferSourceUser._id}?transferTo=${transferTargetUserId}`
+        : `${API_BASE_URL}/api/admin-dashboard/users/${transferSourceUser._id}`;
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
-
       if (!response.ok) {
-        throw new Error('Failed to delete user');
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to delete user');
       }
-
-      setUsers(users.filter(user => user._id !== userId));
+  setUsers(prev => prev.filter(u => u._id !== transferSourceUser._id));
+      setShowTransferModal(false);
+      setTransferSourceUser(null);
+      setTransferTargetUserId('');
     } catch (error) {
-      console.error('Error deleting user:', error);
-      setError('Failed to delete user');
+      console.error('Error deleting/transferring user:', error);
+      setError(error.message || 'Failed to delete user');
     }
   };
 
@@ -273,7 +350,7 @@ const UserManagement = () => {
     setCreateErrors(prev => ({ ...prev, password: undefined }));
     return pwd;
   };
-
+  // Create user handler
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     setCreateSuccess('');
@@ -348,6 +425,12 @@ const UserManagement = () => {
 
   return (
     <div className="kt-stack gap-16">
+      {/* DEBUG: show last delete-flow message and modal state for troubleshooting */}
+      {debugMessage && (
+        <div style={{padding:8, background:'rgba(15,23,42,0.04)', border:'1px solid var(--kt-border)', borderRadius:6}}>
+          <strong>Debug:</strong> {debugMessage} {showTransferModal ? '(transfer modal open)' : '(modal closed)'}
+        </div>
+      )}
       <div className="kt-card">
         <div className="flex gap-12" style={{alignItems:'center', justifyContent:'space-between'}}>
           <div>
@@ -379,6 +462,7 @@ const UserManagement = () => {
             <tr>
               <th>Name</th>
               <th>Email</th>
+              <th>Saved Configs</th>
               <th>Role</th>
               <th>Status</th>
               <th>Created</th>
@@ -395,6 +479,11 @@ const UserManagement = () => {
                   {user.name}
                 </td>
                 <td>{user.email}</td>
+                <td style={{textAlign:'center'}}>
+                  <span className="badge" style={{background:'transparent', color:'var(--kt-text)'}}>
+                    {typeof configCounts[user._id] === 'number' ? configCounts[user._id] : '-'}
+                  </span>
+                </td>
                 <td>
                   <span className="badge primary" style={{textTransform:'capitalize'}}>{user.role}</span>
                 </td>
@@ -416,6 +505,34 @@ const UserManagement = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Transfer / Delete Modal */}
+      {showTransferModal && transferSourceUser && (
+        <div className="modal-overlay" style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:99999, pointerEvents:'auto'}}>
+          <div className="kt-card" style={{width:'min(640px,100%)'}}>
+            <div className="flex" style={{justifyContent:'space-between', alignItems:'center'}}>
+              <div className="kt-card-header">Delete User: {transferSourceUser.name}</div>
+              <button onClick={() => { setShowTransferModal(false); setTransferSourceUser(null); }} style={{border:'none', background:'transparent', fontSize:24, lineHeight:1, cursor:'pointer'}}>×</button>
+            </div>
+            <div style={{padding:16}}>
+              <p>This user has saved configurations. You can transfer them to another user, or delete them along with the account.</p>
+              <div style={{marginTop:12}}>
+                <label style={{display:'block', marginBottom:8}}>Transfer configurations to (optional):</label>
+                <select value={transferTargetUserId} onChange={(e) => setTransferTargetUserId(e.target.value)} style={{width:'100%', padding:8}}>
+                  <option value="">-- Do not transfer (delete configs) --</option>
+                  {users.filter(u => u._id !== transferSourceUser._id).map(u => (
+                    <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div style={{display:'flex', justifyContent:'flex-end', gap:12, padding:12, borderTop:'1px solid var(--kt-border)'}}>
+              <button className="kt-btn" onClick={() => { setShowTransferModal(false); setTransferSourceUser(null); setTransferTargetUserId(''); }}>Cancel</button>
+              <button className="kt-btn danger" onClick={confirmDeleteWithTransfer}>Confirm Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showEditModal && editingUser && (
         <div className="modal-overlay" style={{position:'fixed', inset:0, background:'rgba(15,23,42,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'60px 20px', zIndex:200}}>
