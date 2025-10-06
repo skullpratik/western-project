@@ -139,7 +139,7 @@ export function Interface({
       }
       
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/configs/save', {
+      const response = await fetch('http://192.168.1.7:5000/api/configs/save', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

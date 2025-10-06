@@ -45,7 +45,7 @@ function UserPreview() {
   useEffect(() => {
     const fetchDbModels = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/models`);
+        const response = await fetch(`http://192.168.1.7:5000/api/models`);
         if (response.ok) {
           const models = await response.json();
           setDbModels(models);
@@ -61,7 +61,7 @@ function UserPreview() {
   useEffect(() => {
     const handler = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/models`);
+        const response = await fetch(`http://192.168.1.7:5000/api/models`);
         if (response.ok) {
           const models = await response.json();
           setDbModels(models);
@@ -127,7 +127,7 @@ function UserPreview() {
     return () => window.removeEventListener('customModelsUpdated', handler);
   }, []);
   // --- External config fetch/merge logic (copied from MainApp) ---
-  const API_BASE_URL = 'http://localhost:5000';
+  const API_BASE_URL = 'http://192.168.1.7:5000';
   const normalizeModelUrls = useCallback((cfg) => {
     if (!cfg || typeof cfg !== 'object') return cfg;
     const out = { ...cfg };

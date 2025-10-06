@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import "./AdminDashboard.css";
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = "http://192.168.1.7:5000/api";
 
 export function AdminDashboard() {
   const [users, setUsers] = useState([]);

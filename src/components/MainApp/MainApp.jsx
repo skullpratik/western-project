@@ -7,7 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { ActivityLog } from "../ActivityLog/ActivityLog";
 import './MainApp.css';
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'http://192.168.1.7:5000';
 
 function MainApp() {
   const { user, logout } = useAuth();

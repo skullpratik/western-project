@@ -6,7 +6,7 @@ import AddModelModalMultiAsset from './AddModelModal_MultiAsset.jsx';
 // import { modelsConfig } from '../../../modelsConfig'; // Removed - using dynamic configs only
 import './ModelManagement.css';
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'http://192.168.1.7:5000';
 
 const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
   const [open, setOpen] = useState(false);

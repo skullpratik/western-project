@@ -1589,7 +1589,7 @@ export function Experience({
             const formData = new FormData();
             formData.append('texture', fileOrPath);
             try {
-              const uploadResponse = await fetch('http://localhost:5000/api/upload-texture', {
+              const uploadResponse = await fetch('http://192.168.1.7:5000/api/upload-texture', {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -2194,7 +2194,7 @@ export function Experience({
               formData.append('texture', texture);
 
               try {
-                const uploadResponse = await fetch('http://localhost:5000/api/upload-texture', {
+                const uploadResponse = await fetch('http://192.168.1.7:5000/api/upload-texture', {
                   method: 'POST',
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`

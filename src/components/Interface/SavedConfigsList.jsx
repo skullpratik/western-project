@@ -18,10 +18,10 @@ const SavedConfigsList = ({ isOpen, onClose, onLoad, modelName, userId }) => {
       const token = localStorage.getItem('token');
       // If userId is provided and we're an admin, fetch via admin endpoint for that user
       const url = userId
-        ? `http://localhost:5000/api/admin/user-configs/${userId}${modelName ? `?modelName=${encodeURIComponent(modelName)}` : ''}`
+        ? `http://192.168.1.7:5000/api/admin/user-configs/${userId}${modelName ? `?modelName=${encodeURIComponent(modelName)}` : ''}`
         : modelName
-          ? `http://localhost:5000/api/configs/user?modelName=${encodeURIComponent(modelName)}`
-          : 'http://localhost:5000/api/configs/user';
+          ? `http://192.168.1.7:5000/api/configs/user?modelName=${encodeURIComponent(modelName)}`
+          : 'http://192.168.1.7:5000/api/configs/user';
         
       const response = await fetch(url, {
         headers: {
@@ -47,7 +47,7 @@ const SavedConfigsList = ({ isOpen, onClose, onLoad, modelName, userId }) => {
   const handleLoadConfig = async (config) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/configs/${config._id}`, {
+      const response = await fetch(`http://192.168.1.7:5000/api/configs/${config._id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -74,7 +74,7 @@ const SavedConfigsList = ({ isOpen, onClose, onLoad, modelName, userId }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/configs/${configId}`, {
+      const response = await fetch(`http://192.168.1.7:5000/api/configs/${configId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

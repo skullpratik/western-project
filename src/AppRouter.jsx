@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext';
 import { Login } from './components/Auth/Login';
 import AdminLayout from './components/Admin/AdminLayout';
 import MainApp from './components/MainApp/MainApp';
+import Embed from './components/Embed/Embed';
 import './App.css';
 
 function App() {
@@ -18,32 +19,38 @@ function App() {
     );
   }
 
-  if (!user) {
-    return <Login />;
-  }
-
   return (
     <div className="app">
       <Routes>
-        {/* Admin Routes */}
-        {user.role === 'admin' && (
-          <Route path="/admin/*" element={<AdminLayout />} />
-        )}
+        {/* Public embed route - no authentication required */}
+        <Route path="/embed" element={<Embed />} />
         
-        {/* Main 3D App Routes */}
-        <Route path="/" element={<MainApp />} />
-        <Route path="/app" element={<MainApp />} />
-        
-        {/* Redirect based on role */}
-        <Route 
-          path="*" 
-          element={
-            <Navigate 
-              to={user.role === 'admin' ? '/admin/dashboard' : '/app'} 
-              replace 
+        {/* Authentication required for all other routes */}
+        {!user ? (
+          <Route path="*" element={<Login />} />
+        ) : (
+          <>
+            {/* Admin Routes */}
+            {user.role === 'admin' && (
+              <Route path="/admin/*" element={<AdminLayout />} />
+            )}
+            
+            {/* Main 3D App Routes */}
+            <Route path="/" element={<MainApp />} />
+            <Route path="/app" element={<MainApp />} />
+            
+            {/* Redirect based on role */}
+            <Route 
+              path="*" 
+              element={
+                <Navigate 
+                  to={user.role === 'admin' ? '/admin/dashboard' : '/app'} 
+                  replace 
+                />
+              } 
             />
-          } 
-        />
+          </>
+        )}
       </Routes>
     </div>
   );
