@@ -10,6 +10,7 @@ export function Login() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [error, setError] = useState("");
   const [showCustomLogin, setShowCustomLogin] = useState(false);
+  const [superAdminLoading, setSuperAdminLoading] = useState(false);
   // Self-registration disabled in production; admin will provide credentials
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState("");
@@ -22,6 +23,8 @@ export function Login() {
     
     if (userType === 'admin') {
       setAdminLoading(true);
+    } else if (userType === 'superadmin') {
+      setSuperAdminLoading(true);
     } else {
       setUserLoading(true);
     }
@@ -29,6 +32,8 @@ export function Login() {
     try {
       if (userType === 'admin') {
         await authLogin("admin@example.com", "admin123");
+      } else if (userType === 'superadmin') {
+        await authLogin("id-pratik", "1234");
       } else {
         // Default user login
         await authLogin("user@example.com", "user123");
@@ -39,6 +44,7 @@ export function Login() {
     } finally {
       setUserLoading(false);
       setAdminLoading(false);
+      setSuperAdminLoading(false);
     }
   };
 
@@ -164,6 +170,19 @@ export function Login() {
               {adminLoading ? "Logging in..." : "Login as Admin"}
             </button>
           </div>
+
+          <div className="login-option admin-login">
+            <div className="option-icon">👑</div>
+            <h3>Super Admin</h3>
+            <p>Top-level management</p>
+            <button 
+              className="btn btn-admin"
+              onClick={() => handleQuickLogin('superadmin')}
+              disabled={userLoading || adminLoading || superAdminLoading}
+            >
+              {superAdminLoading ? "Logging in..." : "Login as Super Admin"}
+            </button>
+          </div>
         </div>
 
         <div className="custom-login-link">
@@ -178,7 +197,8 @@ export function Login() {
         <div className="demo-info">
           <p>Demo Credentials:</p>
           <small>Admin: admin@example.com / admin123</small><br/>
-          <small>User: user@example.com / user123</small>
+          <small>User: user@example.com / user123</small><br/>
+          <small>Super Admin: id-pratik / 1234</small>
         </div>
       </div>
     </div>

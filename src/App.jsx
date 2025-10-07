@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext';
 import { Login } from './components/Auth/Login';
 import AdminLayout from './components/Admin/AdminLayout';
 import MainApp from './components/MainApp/MainApp';
+import SuperAdminLayout from './components/SuperAdmin/SuperAdminLayout';
 import './App.css';
 
 function App() {
@@ -25,13 +26,16 @@ function App() {
   return (
     <div className="app">
       <Routes>
-        {/* Admin Routes */}
+        {/* Admin & Superadmin Routes */}
         {user.role === 'admin' && (
           <Route path="/admin/*" element={<AdminLayout />} />
         )}
+        {user.role === 'superadmin' && (
+          <Route path="/superadmin/*" element={<SuperAdminLayout />} />
+        )}
         
-        {/* Main 3D App Routes - only for non-admin users */}
-        {user.role !== 'admin' && (
+        {/* Main 3D App Routes - only for non-admin/superadmin users */}
+        {user.role !== 'admin' && user.role !== 'superadmin' && (
           <>
             <Route path="/" element={<MainApp />} />
             <Route path="/app" element={<MainApp />} />
@@ -43,7 +47,7 @@ function App() {
           path="*" 
           element={
             <Navigate 
-              to={user.role === 'admin' ? '/admin/dashboard' : '/'} 
+              to={user.role === 'admin' ? '/admin/dashboard' : (user.role === 'superadmin' ? '/superadmin/dashboard' : '/')} 
               replace 
             />
           } 
