@@ -20,8 +20,7 @@ const Dashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState({
     totalUsers: 0,
-    activeUsers: 0,
-    inactiveUsers: 0,
+    // active/inactive removed
     adminUsers: 0,
     standardUsers: 0,
     totalModels: 0,
@@ -49,15 +48,11 @@ const Dashboard = () => {
       if (usersResponse.ok) {
         const users = await usersResponse.json();
         const total = users.length;
-        const active = users.filter(u => u.isActive).length;
-        const inactive = total - active;
-        const admins = users.filter(u => u.role === 'admin').length;
-        const standard = total - admins;
+  const admins = users.filter(u => (u.role === 'admin' || u.role === 'superadmin')).length;
+  const standard = total - admins;
         setStats(prev => ({
           ...prev,
           totalUsers: total,
-            activeUsers: active,
-            inactiveUsers: inactive,
             adminUsers: admins,
             standardUsers: standard,
         }));
@@ -157,18 +152,7 @@ const Dashboard = () => {
     ]
   }), [stats]);
 
-  const activeUserData = useMemo(() => ({
-    labels: ['Active', 'Inactive'],
-    datasets: [
-      {
-        label: 'Users',
-        data: [stats.activeUsers, stats.inactiveUsers],
-        backgroundColor: [chartColors.success, chartColors.warning],
-        borderRadius: 6,
-        maxBarThickness: 42
-      }
-    ]
-  }), [stats]);
+  // Active/inactive chart removed
 
   const baseOptions = {
     responsive: true,
@@ -224,8 +208,7 @@ const Dashboard = () => {
 
       <div className="stats-grid">
         <StatCard title="Total Users" value={stats.totalUsers} icon="👥" />
-        <StatCard title="Active Users" value={stats.activeUsers} icon="✅" />
-        <StatCard title="Inactive Users" value={stats.inactiveUsers} icon="⏸" />
+  {/* Active/inactive removed */}
         <StatCard title="Admins" value={stats.adminUsers} icon="🛡" />
         <StatCard title="Standard Users" value={stats.standardUsers} icon="🧑" />
         <StatCard title="Models" value={stats.totalModels} icon="🎯" />
@@ -251,12 +234,7 @@ const Dashboard = () => {
             }} />
           </div>
         </div>
-        <div className="kt-card">
-          <div className="kt-chart-title">👥 Status</div>
-          <div style={{height:'180px'}}>
-            <Bar data={activeUserData} options={baseOptions} />
-          </div>
-        </div>
+        {/* Status chart removed */}
       </div>
 
       <div className="kt-card">

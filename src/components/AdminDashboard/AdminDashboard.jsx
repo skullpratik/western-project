@@ -49,19 +49,7 @@ export function AdminDashboard() {
   };
 
   const toggleUserActive = async (userId) => {
-    try {
-      setError("");
-      const token = localStorage.getItem("token");
-      await axios.patch(
-        `${API_BASE}/admin-dashboard/users/${userId}/toggle-active`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      fetchUsers(); // Refresh list
-    } catch (error) {
-      console.error("Error toggling user status:", error);
-      setError(error.response?.data?.message || "Error updating user status");
-    }
+    // User active/deactivated status removed from system
   };
 
   const deleteUser = async (userId) => {
@@ -105,20 +93,12 @@ export function AdminDashboard() {
               <h3>{user.name}</h3>
               <p>{user.email}</p>
               <p>Role: <span className={`role ${user.role}`}>{user.role}</span></p>
-              <p>Status: <span className={user.isActive ? "active" : "inactive"}>
-                {user.isActive ? "Active" : "Inactive"}
-              </span></p>
+              {/* Status removed */}
               <p>Created: {new Date(user.createdAt).toLocaleDateString()}</p>
             </div>
             
             <div className="user-actions">
-              <button
-                onClick={() => toggleUserActive(user._id)}
-                className={user.isActive ? "btn-deactivate" : "btn-activate"}
-                disabled={user._id === JSON.parse(localStorage.getItem("user"))?.id}
-              >
-                {user.isActive ? "Deactivate" : "Activate"}
-              </button>
+              {/* Activate/Deactivate removed */}
               
               <button
                 onClick={() => setSelectedUser(selectedUser?._id === user._id ? null : user)}

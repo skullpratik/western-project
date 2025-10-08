@@ -8,18 +8,9 @@ import '../Admin/admin-theme.css';
 import '../Admin/AdminLayout.css';
 import AddModelModalMultiAsset from '../Admin/ModelManagement/AddModelModal_MultiAsset';
 import ModelManagement from '../Admin/ModelManagement/ModelManagement';
+import PasswordReset from '../../components/Auth/PasswordReset';
 
-const ChangePassword = () => (
-  <div className="kt-card" style={{ maxWidth: 520 }}>
-    <div style={{fontSize:'12px', fontWeight:'600', color:'var(--kt-text-soft)', marginBottom:'12px'}}>🔒 Change Password</div>
-    <div style={{display:'grid', gap:8}}>
-      <input disabled placeholder="Current password" className="kt-input" />
-      <input disabled placeholder="New password" className="kt-input" />
-      <input disabled placeholder="Confirm new password" className="kt-input" />
-      <button className="kt-btn" disabled>Update (coming soon)</button>
-    </div>
-  </div>
-);
+// replaced with PasswordReset component
 
 const Topbar = ({ collapsed, onToggle, name }) => (
   <div className="kt-topbar">
@@ -66,7 +57,7 @@ const UserShell = () => {
             <Route path="/viewer" element={<MainApp />} />
             <Route path="/upload-model" element={<UserUpload />} />
             <Route path="/model-management" element={<UserModelManagement />} />
-            <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="/change-password" element={<PasswordReset />} />
             <Route path="*" element={<Navigate to="/user/dashboard" replace />} />
           </Routes>
         </div>

@@ -33,7 +33,7 @@ export function Login() {
       if (userType === 'admin') {
         await authLogin("admin@example.com", "admin123");
       } else if (userType === 'superadmin') {
-        await authLogin("id-pratik", "1234");
+        await authLogin("super@gmail.com", "-1234");
       } else {
         // Default user login
         await authLogin("user@example.com", "user123");
@@ -192,13 +192,26 @@ export function Login() {
           >
             Custom Login
           </button>
+          {/* Quick open custom login prefilled as Admin for convenience */}
+          <button
+            className="btn btn-secondary"
+            style={{ marginLeft: 8 }}
+            onClick={() => {
+              setShowCustomLogin(true);
+              // prefill admin credentials in custom form
+              setEmail('admin@example.com');
+              setPassword('admin123');
+            }}
+          >
+            Admin Login (Custom)
+          </button>
         </div>
 
         <div className="demo-info">
           <p>Demo Credentials:</p>
           <small>Admin: admin@example.com / admin123</small><br/>
           <small>User: user@example.com / user123</small><br/>
-          <small>Super Admin: id-pratik / 1234</small>
+          <small>Super Admin: super@gmail.com / -1234</small>
         </div>
       </div>
     </div>

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../../context/AuthContext';
 import './UserManagement.css';
 import { ActivityLog } from '../../ActivityLog/ActivityLog';
 import SavedConfigsList from '../../Interface/SavedConfigsList';
+import SendPasswordReset from '../SendPasswordReset';
 
 const API_BASE_URL = 'http://192.168.1.7:5000';
 
@@ -27,6 +29,10 @@ const UserManagement = () => {
   const [showUserConfigs, setShowUserConfigs] = useState(false);
   const [configsUserId, setConfigsUserId] = useState(null);
   const [debugMessage, setDebugMessage] = useState('');
+  const { user: tokenUser } = useAuth();
+  const isSuperAdmin = tokenUser?.role === 'superadmin';
+  const [selectedTab, setSelectedTab] = useState('admins'); // 'admins' | 'users'
+  const currentUserId = tokenUser?.id || tokenUser?._id || (tokenUser?._id && tokenUser._id.toString && tokenUser._id.toString());
 
   useEffect(() => {
     fetchUsers();
@@ -195,29 +201,7 @@ const UserManagement = () => {
     }));
   };
 
-  const handleToggleActive = async (userId) => {
-    try {
-      const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/api/admin-dashboard/users/${userId}/toggle-active`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to toggle user status');
-      }
-
-      const data = await response.json();
-      setUsers(prev => prev.map(u => (u._id === userId ? { ...u, isActive: data.isActive } : u)));
-      setEditingUser(prev => (prev && prev._id === userId ? { ...prev, isActive: data.isActive } : prev));
-    } catch (error) {
-      console.error('Error toggling user status:', error);
-      setError('Failed to update user status');
-    }
-  };
+  // Active/deactivated status removed; no toggle function
 
   const handleDeleteUser = async (userId) => {
     try {
@@ -443,8 +427,7 @@ const UserManagement = () => {
           </div>
           <div className="flex gap-12" style={{fontSize:12}}>
             <span className="badge primary">Total {users.length}</span>
-            <span className="badge">Active {users.filter(u => u.isActive).length}</span>
-            {/* Per-user delete available inside the ActivityLog modal */}
+            {/* Active/inactive removed */}
           </div>
           <div>
             <button className="kt-btn primary" onClick={() => setShowCreateModal(true)}>Create User</button>
@@ -460,10 +443,149 @@ const UserManagement = () => {
         </div>
       )}
 
-      <div className="kt-table-wrapper">
-        <table className="kt-table">
-          <thead>
-            <tr>
+      {isSuperAdmin ? (
+        <div className="kt-card" style={{padding:12}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
+            <div style={{display:'flex', gap:8, alignItems:'center'}}>
+              <button
+                className={`kt-btn sm ${selectedTab === 'admins' ? 'primary' : 'outline'}`}
+                onClick={() => setSelectedTab('admins')}
+                style={{minWidth:110}}
+              >
+                Admins ({users.filter(u => (u.role === 'admin' || u.role === 'superadmin') && String(u._id) !== String(currentUserId)).length})
+              </button>
+              <button
+                className={`kt-btn sm ${selectedTab === 'users' ? 'primary' : 'outline'}`}
+                onClick={() => setSelectedTab('users')}
+                style={{minWidth:110}}
+              >
+                Users ({users.filter(u => u.role === 'user').length})
+              </button>
+            </div>
+            <div style={{fontSize:13, color:'var(--kt-text-soft)'}}>Select a list to manage</div>
+          </div>
+
+          <div style={{marginTop:12}}>
+            {selectedTab === 'admins' ? (
+              <div className="kt-table-wrapper">
+                <table className="kt-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.filter(u => (u.role === 'admin' || u.role === 'superadmin') && String(u._id) !== String(currentUserId)).map(user => (
+                      <tr key={user._id}>
+                        <td style={{display:'flex', alignItems:'center', gap:8}}>
+                          <div className="kt-avatar" style={{width:34, height:34, fontSize:13}}>{user.name.charAt(0).toUpperCase()}</div>
+                          <span>{user.name}</span>
+                        </td>
+                        <td>{user.email}</td>
+                        <td><span className="badge primary" style={{textTransform:'capitalize'}}>{user.role}</span></td>
+                        <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                        <td>
+                          <div className="kt-actions">
+                            {isSuperAdmin && <button onClick={() => handleEditUser(user)}>Edit</button>}
+                            <button onClick={() => { setActivityUserId(user._id); setShowActivityModal(true); }}>View Activity</button>
+                            {isSuperAdmin && <button onClick={() => handleDeleteUser(user._id)}>Delete</button>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="kt-table-wrapper">
+                <table className="kt-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Saved Configs</th>
+                      <th>Role</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.filter(u => u.role === 'user').map(user => (
+                      <tr key={user._id}>
+                        <td style={{display:'flex', alignItems:'center', gap:8}}>
+                          <div className="kt-avatar" style={{width:34, height:34, fontSize:13}}>{user.name.charAt(0).toUpperCase()}</div>
+                          <span>{user.name}</span>
+                          {(() => { const p=user?.permissions||{}; return p.modelUpload||p.modelManageUpload||p.modelManageEdit||p.modelManageDelete; })() ? (
+                            <span
+                              title="Model management permission granted"
+                              aria-label="Model management permission"
+                              style={{
+                                display:'inline-flex',
+                                alignItems:'center',
+                                justifyContent:'center',
+                                fontSize:12,
+                                lineHeight:1,
+                                padding:'2px 6px',
+                                borderRadius:999,
+                                background:'var(--kt-primary-ghost, rgba(99,102,241,0.15))',
+                                color:'var(--kt-primary, #6366f1)'
+                              }}
+                            >
+                              ⤴️
+                            </span>
+                          ) : null}
+                        </td>
+                        <td>{user.email}</td>
+                        <td style={{textAlign:'center'}}>
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            title="Click to view saved configurations"
+                            onClick={() => { setConfigsUserId(user._id); setShowUserConfigs(true); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setConfigsUserId(user._id); setShowUserConfigs(true); } }}
+                            style={{display:'inline-flex', alignItems:'center', gap:8, cursor: typeof configCounts[user._id] === 'number' && configCounts[user._id] > 0 ? 'pointer' : 'default', padding:'6px 8px', borderRadius:6}}
+                          >
+                            {typeof configCounts[user._id] === 'number' && configCounts[user._id] > 0 ? (
+                              <>
+                                <span style={{fontSize:14, opacity:0.95}}>📋</span>
+                                <span style={{textDecoration:'underline', color:'var(--kt-primary)', fontWeight:600}}>{configCounts[user._id]}</span>
+                              </>
+                            ) : (
+                              <span className="badge" style={{background:'transparent', color:'var(--kt-text)'}}>-</span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="badge primary" style={{textTransform:'capitalize'}}>
+                            {user.role === 'user' && user?.permissions?.modelUpload ? 'custom user' : user.role}
+                          </span>
+                        </td>
+                        <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                        <td>
+                          <div className="kt-actions">
+                            <button onClick={() => handleEditUser(user)}>Edit</button>
+                            <button onClick={() => { setActivityUserId(user._id); setShowActivityModal(true); }}>View Activity</button>
+                            <SendPasswordReset userEmail={user.email} />
+                            <button onClick={() => handleDeleteUser(user._id)}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="kt-table-wrapper">
+          <table className="kt-table">
+            <thead>
+              <tr>
                 <th>Name</th>
                 <th>Email</th>
                 <th>
@@ -471,82 +593,77 @@ const UserManagement = () => {
                   <div style={{fontSize:11, color:'var(--kt-text-soft)', marginTop:4}}>Click the number to view</div>
                 </th>
                 <th>Role</th>
-                <th>Status</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
-          </thead>
-          <tbody>
-            {users.filter(u => u.role !== 'admin' && u.role !== 'superadmin').map(user => (
-              <tr key={user._id}>
-                <td style={{display:'flex', alignItems:'center', gap:8}}>
-                  <div className="kt-avatar" style={{width:34, height:34, fontSize:13}}>
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <span>{user.name}</span>
-                  {(() => { const p=user?.permissions||{}; return p.modelUpload||p.modelManageUpload||p.modelManageEdit||p.modelManageDelete; })() ? (
-                    <span
-                      title="Model management permission granted"
-                      aria-label="Model management permission"
-                      style={{
-                        display:'inline-flex',
-                        alignItems:'center',
-                        justifyContent:'center',
-                        fontSize:12,
-                        lineHeight:1,
-                        padding:'2px 6px',
-                        borderRadius:999,
-                        background:'var(--kt-primary-ghost, rgba(99,102,241,0.15))',
-                        color:'var(--kt-primary, #6366f1)'
-                      }}
+            </thead>
+            <tbody>
+              {users.filter(u => u.role !== 'admin' && u.role !== 'superadmin').map(user => (
+                <tr key={user._id}>
+                  <td style={{display:'flex', alignItems:'center', gap:8}}>
+                    <div className="kt-avatar" style={{width:34, height:34, fontSize:13}}>
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span>{user.name}</span>
+                    {(() => { const p=user?.permissions||{}; return p.modelUpload||p.modelManageUpload||p.modelManageEdit||p.modelManageDelete; })() ? (
+                      <span
+                        title="Model management permission granted"
+                        aria-label="Model management permission"
+                        style={{
+                          display:'inline-flex',
+                          alignItems:'center',
+                          justifyContent:'center',
+                          fontSize:12,
+                          lineHeight:1,
+                          padding:'2px 6px',
+                          borderRadius:999,
+                          background:'var(--kt-primary-ghost, rgba(99,102,241,0.15))',
+                          color:'var(--kt-primary, #6366f1)'
+                        }}
+                      >
+                        ⤴️
+                      </span>
+                    ) : null}
+                  </td>
+                  <td>{user.email}</td>
+                  <td style={{textAlign:'center'}}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      title="Click to view saved configurations"
+                      onClick={() => { setConfigsUserId(user._id); setShowUserConfigs(true); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setConfigsUserId(user._id); setShowUserConfigs(true); } }}
+                      style={{display:'inline-flex', alignItems:'center', gap:8, cursor: typeof configCounts[user._id] === 'number' && configCounts[user._id] > 0 ? 'pointer' : 'default', padding:'6px 8px', borderRadius:6}}
                     >
-                      ⤴️
+                      {typeof configCounts[user._id] === 'number' && configCounts[user._id] > 0 ? (
+                        <>
+                          <span style={{fontSize:14, opacity:0.95}}>📋</span>
+                          <span style={{textDecoration:'underline', color:'var(--kt-primary)', fontWeight:600}}>{configCounts[user._id]}</span>
+                        </>
+                      ) : (
+                        <span className="badge" style={{background:'transparent', color:'var(--kt-text)'}}>-</span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span className="badge primary" style={{textTransform:'capitalize'}}>
+                      {user.role === 'user' && user?.permissions?.modelUpload ? 'custom user' : user.role}
                     </span>
-                  ) : null}
-                </td>
-                <td>{user.email}</td>
-                <td style={{textAlign:'center'}}>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    title="Click to view saved configurations"
-                    onClick={() => { setConfigsUserId(user._id); setShowUserConfigs(true); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setConfigsUserId(user._id); setShowUserConfigs(true); } }}
-                    style={{display:'inline-flex', alignItems:'center', gap:8, cursor: typeof configCounts[user._id] === 'number' && configCounts[user._id] > 0 ? 'pointer' : 'default', padding:'6px 8px', borderRadius:6}}
-                  >
-                    {typeof configCounts[user._id] === 'number' && configCounts[user._id] > 0 ? (
-                      <>
-                        <span style={{fontSize:14, opacity:0.95}}>📋</span>
-                        <span style={{textDecoration:'underline', color:'var(--kt-primary)', fontWeight:600}}>{configCounts[user._id]}</span>
-                      </>
-                    ) : (
-                      <span className="badge" style={{background:'transparent', color:'var(--kt-text)'}}>-</span>
-                    )}
-                  </div>
-                </td>
-                <td>
-                  <span className="badge primary" style={{textTransform:'capitalize'}}>
-                    {user.role === 'user' && user?.permissions?.modelUpload ? 'custom user' : user.role}
-                  </span>
-                </td>
-                <td>
-                  <span className="badge" style={{background: user.isActive ? 'rgba(16,185,129,.12)' : 'rgba(245,158,11,.15)', color: user.isActive ? 'var(--kt-success)' : 'var(--kt-warning)'}}>
-                    {user.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
-                <td>{new Date(user.createdAt).toLocaleDateString()}</td>
-                <td>
-                  <div className="kt-actions">
-                    <button onClick={() => handleEditUser(user)}>Edit</button>
-                    <button onClick={() => { setActivityUserId(user._id); setShowActivityModal(true); }}>View Activity</button>
-                    <button onClick={() => handleDeleteUser(user._id)}>Delete</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  </td>
+                  <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                  <td>
+                    <div className="kt-actions">
+                      <button onClick={() => handleEditUser(user)}>Edit</button>
+                      <button onClick={() => { setActivityUserId(user._id); setShowActivityModal(true); }}>View Activity</button>
+                      <button onClick={() => handleDeleteUser(user._id)}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Transfer / Delete Modal */}
       {showTransferModal && transferSourceUser && (
@@ -619,15 +736,7 @@ const UserManagement = () => {
                       disabled
                     />
                   </div>
-                  <div style={{flex:'1 1 160px', display:'flex', alignItems:'flex-end'}}>
-                    <label style={{display:'flex', gap:8, alignItems:'center', fontSize:13}}>
-                      <input
-                        type="checkbox"
-                        checked={!!editingUser.isActive}
-                        onChange={() => handleToggleActive(editingUser._id)}
-                      /> Active
-                    </label>
-                  </div>
+                  {/* Active flag removed */}
                 </div>
               </div>
 

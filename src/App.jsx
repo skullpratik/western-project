@@ -28,7 +28,7 @@ function App() {
     <div className="app">
       <Routes>
         {/* Admin & Superadmin Routes */}
-        {user.role === 'admin' && (
+        {(user.role === 'admin' || user.role === 'superadmin') && (
           <Route path="/admin/*" element={<AdminLayout />} />
         )}
         {user.role === 'superadmin' && (
@@ -50,11 +50,9 @@ function App() {
           element={
             <Navigate 
               to={
-                user.role === 'admin'
+                user.role === 'admin' || user.role === 'superadmin'
                   ? '/admin/dashboard'
-                  : user.role === 'superadmin'
-                    ? '/superadmin/dashboard'
-                    : '/user/dashboard'
+                  : '/user/dashboard'
               } 
               replace 
             />

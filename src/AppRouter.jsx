@@ -32,10 +32,13 @@ function App() {
           <Route path="*" element={<Login />} />
         ) : user.role === 'superadmin' ? (
           <>
+            {/* Keep the superadmin panel routes available for special actions */}
             <Route path="/superadmin/*" element={<SuperAdminLayout />} />
-            <Route path="/" element={<Navigate to="/superadmin/dashboard" replace />} />
-            <Route path="/app" element={<Navigate to="/superadmin/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/superadmin/dashboard" replace />} />
+            {/* But send superadmins to the regular admin dashboard so they get full admin UI */}
+            <Route path="/admin/*" element={<AdminLayout />} />
+            <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/app" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
           </>
         ) : user.role === 'admin' ? (
           <>

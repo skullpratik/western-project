@@ -245,6 +245,7 @@ function MainApp() {
   }, [mergedModels, dbModelsFormatted, selectedModel]);
   const [api, setApi] = useState(null);
   const [showActivityLog, setShowActivityLog] = useState(false);
+  // removed darkMode, showHelp
 
   // Ref for togglePart (passed to Experience)
   const togglePartRef = useRef();
