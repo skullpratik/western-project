@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { Login } from './components/Auth/Login';
 import AdminLayout from './components/Admin/AdminLayout';
+import SuperAdminLayout from './components/SuperAdmin/SuperAdminLayout';
+import UserLayout from './components/User/UserLayout';
 import MainApp from './components/MainApp/MainApp';
 import Embed from './components/Embed/Embed';
 import './App.css';
@@ -28,27 +30,26 @@ function App() {
         {/* Authentication required for all other routes */}
         {!user ? (
           <Route path="*" element={<Login />} />
+        ) : user.role === 'superadmin' ? (
+          <>
+            <Route path="/superadmin/*" element={<SuperAdminLayout />} />
+            <Route path="/" element={<Navigate to="/superadmin/dashboard" replace />} />
+            <Route path="/app" element={<Navigate to="/superadmin/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/superadmin/dashboard" replace />} />
+          </>
+        ) : user.role === 'admin' ? (
+          <>
+            <Route path="/admin/*" element={<AdminLayout />} />
+            <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/app" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+          </>
         ) : (
           <>
-            {/* Admin Routes */}
-            {user.role === 'admin' && (
-              <Route path="/admin/*" element={<AdminLayout />} />
-            )}
-            
-            {/* Main 3D App Routes */}
-            <Route path="/" element={<MainApp />} />
+            <Route path="/user/*" element={<UserLayout />} />
+            <Route path="/" element={<Navigate to="/user/dashboard" replace />} />
             <Route path="/app" element={<MainApp />} />
-            
-            {/* Redirect based on role */}
-            <Route 
-              path="*" 
-              element={
-                <Navigate 
-                  to={user.role === 'admin' ? '/admin/dashboard' : '/app'} 
-                  replace 
-                />
-              } 
-            />
+            <Route path="*" element={<Navigate to="/user/dashboard" replace />} />
           </>
         )}
       </Routes>

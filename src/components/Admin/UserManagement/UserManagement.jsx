@@ -89,6 +89,7 @@ const UserManagement = () => {
       lightWidget: false,
   globalTextureWidget: false,
   screenshotWidget: false,
+      modelUpload: false,
   // Removed reflectionWidget, movementWidget, customWidget
       saveConfig: false,
       canRotate: true,
@@ -476,13 +477,32 @@ const UserManagement = () => {
               </tr>
           </thead>
           <tbody>
-            {users.map(user => (
+            {users.filter(u => u.role !== 'admin' && u.role !== 'superadmin').map(user => (
               <tr key={user._id}>
                 <td style={{display:'flex', alignItems:'center', gap:8}}>
                   <div className="kt-avatar" style={{width:34, height:34, fontSize:13}}>
                     {user.name.charAt(0).toUpperCase()}
                   </div>
-                  {user.name}
+                  <span>{user.name}</span>
+                  {(() => { const p=user?.permissions||{}; return p.modelUpload||p.modelManageUpload||p.modelManageEdit||p.modelManageDelete; })() ? (
+                    <span
+                      title="Model management permission granted"
+                      aria-label="Model management permission"
+                      style={{
+                        display:'inline-flex',
+                        alignItems:'center',
+                        justifyContent:'center',
+                        fontSize:12,
+                        lineHeight:1,
+                        padding:'2px 6px',
+                        borderRadius:999,
+                        background:'var(--kt-primary-ghost, rgba(99,102,241,0.15))',
+                        color:'var(--kt-primary, #6366f1)'
+                      }}
+                    >
+                      ⤴️
+                    </span>
+                  ) : null}
                 </td>
                 <td>{user.email}</td>
                 <td style={{textAlign:'center'}}>
@@ -505,7 +525,9 @@ const UserManagement = () => {
                   </div>
                 </td>
                 <td>
-                  <span className="badge primary" style={{textTransform:'capitalize'}}>{user.role}</span>
+                  <span className="badge primary" style={{textTransform:'capitalize'}}>
+                    {user.role === 'user' && user?.permissions?.modelUpload ? 'custom user' : user.role}
+                  </span>
                 </td>
                 <td>
                   <span className="badge" style={{background: user.isActive ? 'rgba(16,185,129,.12)' : 'rgba(245,158,11,.15)', color: user.isActive ? 'var(--kt-success)' : 'var(--kt-warning)'}}>
@@ -540,7 +562,7 @@ const UserManagement = () => {
                 <label style={{display:'block', marginBottom:8}}>Transfer configurations to (optional):</label>
                 <select value={transferTargetUserId} onChange={(e) => setTransferTargetUserId(e.target.value)} style={{width:'100%', padding:8}}>
                   <option value="">-- Do not transfer (delete configs) --</option>
-                  {users.filter(u => u._id !== transferSourceUser._id).map(u => (
+                  {users.filter(u => u._id !== transferSourceUser._id && u.role !== 'admin' && u.role !== 'superadmin').map(u => (
                     <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
                   ))}
                 </select>
@@ -590,7 +612,12 @@ const UserManagement = () => {
                   </div>
                   <div style={{flex:'1 1 220px'}}>
                     <label style={{fontSize:12, fontWeight:600, color:'var(--kt-text-soft)'}}>Role</label>
-                    <input style={{width:'100%', marginTop:4}} type="text" value={editingUser.role} disabled />
+                    <input
+                      style={{width:'100%', marginTop:4}}
+                      type="text"
+                      value={(editingUser.role === 'user' && editingUser?.permissions?.modelUpload) ? 'custom user' : editingUser.role}
+                      disabled
+                    />
                   </div>
                   <div style={{flex:'1 1 160px', display:'flex', alignItems:'flex-end'}}>
                     <label style={{display:'flex', gap:8, alignItems:'center', fontSize:13}}>
@@ -604,9 +631,53 @@ const UserManagement = () => {
                 </div>
               </div>
 
+              {/* High-level: Model Management permissions (collapsible) */}
+              <div className="kt-card" style={{boxShadow:'none', border:'1px dashed var(--kt-border)'}}>
+                <div className="kt-card-header" style={{marginBottom:12, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:10}}>
+                    <label style={{display:'flex', gap:6, alignItems:'center', fontSize:12}}>
+                      <input type="checkbox" checked={!!editingUser.permissions.modelUpload} onChange={(e) => handlePermissionChange('modelUpload', e.target.checked)} />
+                      <div>
+                        <div style={{fontWeight:600}}>Model Management</div>
+                        <div style={{fontSize:11, color:'var(--kt-text-soft)'}}>If only this is on, user can view models</div>
+                      </div>
+                    </label>
+                  </div>
+                  <button type="button" className="kt-btn outline sm" onClick={() => setEditingUser(prev => ({...prev, __mmOpen: !prev?.__mmOpen}))}>
+                    {editingUser?.__mmOpen ? 'Hide actions' : 'Choose actions'}
+                  </button>
+                </div>
+                {editingUser?.__mmOpen && (
+                  <div style={{display:'grid', gap:10, gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))'}}>
+                    <label style={{display:'flex', gap:6, alignItems:'center', fontSize:12, background:'var(--kt-surface-alt)', padding:'10px 12px', borderRadius:6, border:'1px solid var(--kt-border)'}}>
+                      <input type="checkbox" checked={!!editingUser.permissions.modelManageUpload} onChange={(e) => handlePermissionChange('modelManageUpload', e.target.checked)} />
+                      <div>
+                        <div style={{fontWeight:600}}>Allow Upload</div>
+                        <div style={{fontSize:11, color:'var(--kt-text-soft)'}}>Add new models and assets</div>
+                      </div>
+                    </label>
+                    <label style={{display:'flex', gap:6, alignItems:'center', fontSize:12, background:'var(--kt-surface-alt)', padding:'10px 12px', borderRadius:6, border:'1px solid var(--kt-border)'}}>
+                      <input type="checkbox" checked={!!editingUser.permissions.modelManageEdit} onChange={(e) => handlePermissionChange('modelManageEdit', e.target.checked)} />
+                      <div>
+                        <div style={{fontWeight:600}}>Allow Edit</div>
+                        <div style={{fontSize:11, color:'var(--kt-text-soft)'}}>Edit model details and config URL</div>
+                      </div>
+                    </label>
+                    <label style={{display:'flex', gap:6, alignItems:'center', fontSize:12, background:'var(--kt-surface-alt)', padding:'10px 12px', borderRadius:6, border:'1px solid var(--kt-border)'}}>
+                      <input type="checkbox" checked={!!editingUser.permissions.modelManageDelete} onChange={(e) => handlePermissionChange('modelManageDelete', e.target.checked)} />
+                      <div>
+                        <div style={{fontWeight:600}}>Allow Delete</div>
+                        <div style={{fontSize:11, color:'var(--kt-text-soft)'}}>Delete models and assets</div>
+                      </div>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Other feature permissions */}
               <div className="kt-card" style={{boxShadow:'none', border:'1px dashed var(--kt-border)'}}>
                 <div className="flex" style={{justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
-                  <div className="kt-card-header" style={{marginBottom:0}}>Permissions</div>
+                  <div className="kt-card-header" style={{marginBottom:0}}>Feature Permissions</div>
                   <div className="flex gap-8">
                     <button type="button" className="kt-btn outline" onClick={grantAll}>Grant All</button>
                     <button type="button" className="kt-btn danger" onClick={revokeAll}>Revoke All</button>
@@ -614,7 +685,7 @@ const UserManagement = () => {
                 </div>
                 <div style={{display:'grid', gap:10, gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))'}}>
                   {Object.entries(editingUser.permissions)
-                    .filter(([key]) => !["reflectionWidget","movementWidget","customWidget","imageDownloadQualities"].includes(key))
+                    .filter(([key]) => !["reflectionWidget","movementWidget","customWidget","imageDownloadQualities","modelUpload","modelManageUpload","modelManageEdit","modelManageDelete"].includes(key))
                     .map(([key, value]) => (
                       <label key={key} style={{display:'flex', gap:6, alignItems:'center', fontSize:12, background:'var(--kt-surface-alt)', padding:'6px 8px', borderRadius:6, border:'1px solid var(--kt-border)'}}>
                         <input

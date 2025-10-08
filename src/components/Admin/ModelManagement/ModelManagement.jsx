@@ -5,6 +5,7 @@ import AddModelModalSimple from './AddModelModal_Simple.jsx';
 import AddModelModalMultiAsset from './AddModelModal_MultiAsset.jsx';
 // import { modelsConfig } from '../../../modelsConfig'; // Removed - using dynamic configs only
 import './ModelManagement.css';
+import { useAuth } from '../../../context/AuthContext';
 
 const API_BASE_URL = 'http://192.168.1.7:5000';
 
@@ -22,29 +23,29 @@ const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
           <span className="model-path">{config.path || config.assets?.base}</span>
         </div>
         <div className="card-actions">
-          {isDbModel && (
-            <>
-              <button 
-                className="btn-secondary-small" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit(config);
-                }}
-                title="Edit model"
-              >
-                ✏️
-              </button>
-              <button 
-                className={`btn-danger-small`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(config.id || config._id, modelName);
-                }}
-                title="Delete model"
-              >
-                🗑️
-              </button>
-            </>
+          {isDbModel && onEdit && (
+            <button 
+              className="btn-secondary-small" 
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(config);
+              }}
+              title="Edit model"
+            >
+              ✏️
+            </button>
+          )}
+          {isDbModel && onDelete && (
+            <button 
+              className={`btn-danger-small`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(config.id || config._id, modelName);
+              }}
+              title="Delete model"
+            >
+              🗑️
+            </button>
           )}
           <button className="details-toggle" type="button">{open ? 'Hide' : 'Details'}</button>
         </div>
@@ -109,6 +110,13 @@ const ModelManagement = () => {
   const [deleteTarget, setDeleteTarget] = useState(null); // {id, name}
   // Track per-model section edits in the debug panel
   const [sectionEdits, setSectionEdits] = useState({});
+  const { user } = useAuth();
+  const perms = (user && user.permissions) || {};
+  const isAdmin = user && (user.role === 'admin' || user.role === 'superadmin');
+  const canView = !!(isAdmin || perms.modelUpload || perms.modelManageUpload || perms.modelManageEdit || perms.modelManageDelete);
+  const canUpload = !!(isAdmin || perms.modelManageUpload);
+  const canEdit = !!(isAdmin || perms.modelManageEdit);
+  const canDelete = !!(isAdmin || perms.modelManageDelete);
 
   // Fetch models from database
   useEffect(() => {
@@ -331,6 +339,17 @@ const ModelManagement = () => {
     setDeleteTarget(null);
   };
 
+  if (!canView) {
+    return (
+      <div className="model-management-container">
+        <div className="page-header">
+          <h1>Model Management</h1>
+          <p className="error">You do not have permission to view models.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="model-management-container">
@@ -363,9 +382,12 @@ const ModelManagement = () => {
       <div className="page-header">
         <h1>Model Management</h1>
         <p>Overview of all 3D models configured in the application.</p>
+        <div style={{marginTop:6, fontSize:13, color:'var(--kt-text-soft)'}}>Total models: {Object.keys(dbModelsFormatted || {}).length}</div>
       </div>
       <div className="toolbar-row" style={{display:'flex', gap:8, alignItems: 'center'}}>
-        <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model (Simple)</button>
+        {canUpload && (
+          <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model (Simple)</button>
+        )}
         <div style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
           <label style={{ fontSize: 13, marginRight: 8 }}>Section:</label>
           <select value={selectedSection || '(All)'} onChange={(e) => setSelectedSection(e.target.value)} style={{ padding: 6, borderRadius: 6 }}>
@@ -382,8 +404,8 @@ const ModelManagement = () => {
             key={modelName} 
             modelName={modelName} 
             config={config}
-            onDelete={handleDeleteRequest}
-            onEdit={handleEditModel}
+            onDelete={canDelete ? handleDeleteRequest : undefined}
+            onEdit={canEdit ? handleEditModel : undefined}
             isDbModel={!!config.id} // Models from database have an id
           />
         ))}

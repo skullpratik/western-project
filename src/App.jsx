@@ -5,6 +5,7 @@ import { Login } from './components/Auth/Login';
 import AdminLayout from './components/Admin/AdminLayout';
 import MainApp from './components/MainApp/MainApp';
 import SuperAdminLayout from './components/SuperAdmin/SuperAdminLayout';
+import UserLayout from './components/User/UserLayout';
 import './App.css';
 
 function App() {
@@ -34,10 +35,11 @@ function App() {
           <Route path="/superadmin/*" element={<SuperAdminLayout />} />
         )}
         
-        {/* Main 3D App Routes - only for non-admin/superadmin users */}
+        {/* Regular user routes: dashboard first, viewer at /app */}
         {user.role !== 'admin' && user.role !== 'superadmin' && (
           <>
-            <Route path="/" element={<MainApp />} />
+            <Route path="/user/*" element={<UserLayout />} />
+            <Route path="/" element={<Navigate to="/user/dashboard" replace />} />
             <Route path="/app" element={<MainApp />} />
           </>
         )}
@@ -47,7 +49,13 @@ function App() {
           path="*" 
           element={
             <Navigate 
-              to={user.role === 'admin' ? '/admin/dashboard' : (user.role === 'superadmin' ? '/superadmin/dashboard' : '/')} 
+              to={
+                user.role === 'admin'
+                  ? '/admin/dashboard'
+                  : user.role === 'superadmin'
+                    ? '/superadmin/dashboard'
+                    : '/user/dashboard'
+              } 
               replace 
             />
           } 

@@ -2496,7 +2496,8 @@ export function Experience({
   {/* Studio lighting (universal product setup). When `isPerformanceMode` is true we
       reduce or skip heavy lighting/features to keep interaction smooth. */}
   {/* Always include HDRI environment so materials can sample it; lower intensity in perf mode */}
-  <Environment files="./environment.hdr" background={false} intensity={isPerformanceMode ? 0.25 : Math.max(0.9, envIntensity)} />
+  {/** Use absolute path so it works under nested routes like /user/viewer */}
+  <Environment files="/environment.hdr" background={false} intensity={isPerformanceMode ? 0.25 : Math.max(0.9, envIntensity)} />
 
   <color attach="background" args={['#e9e9e9']} />
 
