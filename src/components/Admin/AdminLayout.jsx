@@ -52,24 +52,12 @@ const AdminShell = () => {
     <div className="kt-app">
       <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       <div className="kt-main">
-        <div className="kt-topbar">
-          <button className="kt-burger" onClick={toggleSidebar} aria-label="Toggle Sidebar">
-            {sidebarCollapsed ? '☰' : '✕'}
-          </button>
-          <div className="kt-title">{pageTitle}</div>
-          <button className="kt-btn ghost icon-only" onClick={toggleDark} title="Toggle dark mode" aria-label="Toggle dark mode">{dark ? '🌙' : '☀️'}</button>
-          <div className="kt-user">
-            <div className="kt-avatar">{user?.name?.[0]?.toUpperCase() || 'U'}</div>
-            <div className="kt-username">{user?.name || 'User'}</div>
-          </div>
-        </div>
         <div className="kt-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/models" element={<ModelManagement />} />
-            {/* Activity Log route removed; view per-user via User Management */}
             {/* Model Generator removed */}
             <Route path="/user-preview" element={<UserPreview />} />
           </Routes>

@@ -66,7 +66,7 @@ const ModelCard = ({ modelName, config, onDelete, onEdit, isDbModel }) => {
             </div>
           <div className="detail-item">
             <span className="detail-label">UI Widgets</span>
-            <span className="detail-value">{config.uiWidgets?.length || 0}</span>
+            <span className="detail-value">{/* UI widgets count intentionally removed from admin card view */}</span>
           </div>
           {config.configUrl ? (
             <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
@@ -100,6 +100,7 @@ const ModelManagement = () => {
   const [showAddMultiAsset, setShowAddMultiAsset] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editModel, setEditModel] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   // Default to showing all sections
@@ -191,6 +192,20 @@ const ModelManagement = () => {
 
   const allModels = { ...dbModelsFormatted }; // Only use database models
   let modelEntries = Object.entries(allModels);
+  // Apply search filtering
+  if (searchQuery && searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    modelEntries = modelEntries.filter(([name, cfg]) => {
+      const displayNameVal = (cfg.displayName || name || '').toString().trim().toLowerCase();
+      const nameVal = (name || '').toString().trim().toLowerCase();
+      const pathVal = (cfg.path || '').toString().trim().toLowerCase();
+      return (
+        displayNameVal.includes(q) ||
+        nameVal.includes(q) ||
+        pathVal.includes(q)
+      );
+    });
+  }
   if (selectedSection && selectedSection !== '(All)') {
     const needle = (selectedSection || '').toString().trim().toLowerCase();
     modelEntries = modelEntries.filter(([name, cfg]) => {
@@ -382,33 +397,80 @@ const ModelManagement = () => {
       <div className="page-header">
         <h1>Model Management</h1>
         <p>Overview of all 3D models configured in the application.</p>
-        <div style={{marginTop:6, fontSize:13, color:'var(--kt-text-soft)'}}>Total models: {Object.keys(dbModelsFormatted || {}).length}</div>
+        <div className="header-meta">
+          <div className="header-badge">Admin</div>
+          <div>Total models: <strong style={{marginLeft:6}}>{Object.keys(dbModelsFormatted || {}).length}</strong></div>
+        </div>
       </div>
-      <div className="toolbar-row" style={{display:'flex', gap:8, alignItems: 'center'}}>
-        {canUpload && (
-          <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model (Simple)</button>
-        )}
-        <div style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <label style={{ fontSize: 13, marginRight: 8 }}>Section:</label>
-          <select value={selectedSection || '(All)'} onChange={(e) => setSelectedSection(e.target.value)} style={{ padding: 6, borderRadius: 6 }}>
-            {sectionOptions.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
+      <div className="toolbar-row">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+          <input
+            className="model-search"
+            placeholder="Search models by name, display name or path..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search models"
+          />
+
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ fontSize: 13, marginRight: 8 }}>Section:</label>
+            <select value={selectedSection || '(All)'} onChange={(e) => setSelectedSection(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
+              {sectionOptions.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {canUpload && (
+            <button className="btn-primary" onClick={()=>setShowAdd(true)}>Add Model</button>
+          )}
+          <button className="btn-secondary" onClick={() => setShowAddMultiAsset(true)}>Add Multi-Asset</button>
         </div>
       </div>
       
-      <div className="models-grid">
-        {modelEntries.map(([modelName, config]) => (
-          <ModelCard 
-            key={modelName} 
-            modelName={modelName} 
-            config={config}
-            onDelete={canDelete ? handleDeleteRequest : undefined}
-            onEdit={canEdit ? handleEditModel : undefined}
-            isDbModel={!!config.id} // Models from database have an id
-          />
-        ))}
+      <div className="models-table-wrapper">
+        <table className="models-table kt-table" role="table" aria-label="Model Management Table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Section</th>
+              <th>Type</th>
+              <th>Uploaded By</th>
+              <th>Created</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {modelEntries.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="empty-state">No models match your search or filter.</td>
+              </tr>
+            ) : (
+              modelEntries.map(([modelName, config]) => (
+                <tr key={modelName}>
+                  <td style={{ whiteSpace: 'nowrap', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis' }}>{modelName}</td>
+                  <td>{config.section || '-'}</td>
+                  <td>{config.type || '-'}</td>
+                  <td>
+                    {config.uploadedBy ? (
+                      typeof config.uploadedBy === 'string' ? config.uploadedBy : (config.uploadedBy.name || config.uploadedBy.email || config.uploadedBy._id || '-')
+                    ) : '-'}
+                  </td>
+                  <td>{config.createdAt ? new Date(config.createdAt).toLocaleString() : '-'}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {config.id && canEdit && (
+                      <button className="btn-secondary-small" onClick={() => handleEditModel(config)} style={{ marginRight: 8 }}>✏️</button>
+                    )}
+                    {config.id && canDelete && (
+                      <button className="btn-danger-small" onClick={() => handleDeleteRequest(config.id || config._id, modelName)}>🗑️</button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
   {showAdd && <AddModelModalSimple onClose={()=>setShowAdd(false)} onAdd={handleAddModel} onOpenMultiAsset={() => setShowAddMultiAsset(true)} />}
       {showAddMultiAsset && <AddModelModalMultiAsset onClose={()=>setShowAddMultiAsset(false)} onAdd={handleAddModel} />}

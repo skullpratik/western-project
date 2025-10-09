@@ -81,6 +81,9 @@ body.admin-mode { font-family: var(--kt-font-family); background: var(--kt-bg); 
   height:100vh;
 }
 
+/* .kt-topbar rules removed - topbar markup was removed from layouts. 
+   Keeping commented rules here for reference if the topbar is restored later. */
+/*
 .kt-topbar { 
   height:40px; 
   background:var(--kt-surface); 
@@ -125,6 +128,7 @@ body.admin-mode { font-family: var(--kt-font-family); background: var(--kt-bg); 
   gap:6px; 
   flex-shrink:0;
 }
+*/
 /* Avatar - SMALLER */
 .kt-avatar { 
   width:28px; 

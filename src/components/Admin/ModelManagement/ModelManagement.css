@@ -199,8 +199,9 @@
 
 /* Professional Enterprise Model Management */
 .model-management-container {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   padding: 0;
   background: #fafbfc;
   min-height: 100vh;
@@ -208,13 +209,16 @@
 }
 
 .page-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 3rem 2rem;
+  background: linear-gradient(135deg, #5650c9 0%, #8953e5 50%, #a68ce2 100%);
+  padding: 2.25rem 2rem;
   color: white;
   border: none;
-  margin-bottom: 0;
+  margin-bottom: 1.25rem;
   position: relative;
   overflow: hidden;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  box-shadow: 0 6px 20px rgba(79,70,229,0.08);
 }
 
 .page-header::before {
@@ -228,13 +232,13 @@
 }
 
 .page-header h1 {
-  margin: 0 0 0.75rem 0;
-  font-size: 2.5rem;
-  font-weight: 800;
+  margin: 0 0 0.25rem 0;
+  font-size: 1.9rem;
+  font-weight: 700;
   color: white;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   position: relative;
   z-index: 1;
 }
@@ -255,13 +259,32 @@
 
 .page-header p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 1.125rem;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 1rem;
   font-weight: 400;
   line-height: 1.6;
   position: relative;
   z-index: 1;
-  max-width: 600px;
+  max-width: 900px;
+}
+
+.page-header .header-meta {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: rgba(255,255,255,0.85);
+  font-size: 0.95rem;
+}
+
+.page-header .header-badge {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border: 1px solid rgba(255,255,255,0.08);
 }
 
 .toolbar-row {
@@ -275,11 +298,23 @@
   margin-bottom: 2rem;
 }
 
+.model-search {
+  width: 420px;
+  max-width: 60vw;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #e6e9ef;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+  font-size: 14px;
+  transition: box-shadow .18s ease, border-color .18s ease;
+}
+.model-search:focus { outline: none; border-color: #6366f1; box-shadow: 0 6px 20px rgba(99,102,241,0.08); }
+
 /* Modern Card Grid */
 .models-grid {
-  padding: 0 2rem 2rem 2rem;
-  display: flex;
-  flex-direction: column;
+  padding: 0 2rem 3rem 2rem;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 1rem;
 }
 
@@ -305,7 +340,7 @@
 
 /* Clean Header Design */
 .model-card-header {
-  padding: 1.5rem;
+  padding: 1rem 1.25rem;
   background: white;
   border-bottom: 1px solid #f3f4f6;
   display: flex;
@@ -391,11 +426,59 @@
 /* Stats Grid */
 .model-details-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0;
-  padding: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  padding: 1rem 1.25rem;
   background: #fafbfc;
   border-bottom: 1px solid #f3f4f6;
+}
+
+.cards-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6b7280;
+  background: #fff;
+  border: 1px dashed #e6e9ef;
+  border-radius: 10px;
+}
+
+/* Table styles for model management */
+.models-table-wrapper {
+  padding: 0 2rem 3rem 2rem;
+  overflow: auto;
+}
+.models-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  min-width: 800px;
+}
+.models-table thead th {
+  text-align: left;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #334155;
+  border-bottom: 2px solid #eef2ff;
+  background: linear-gradient(90deg, rgba(99,102,241,0.03), rgba(124,58,237,0.02));
+}
+.models-table tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #475569;
+  font-size: 14px;
+  vertical-align: middle;
+}
+.models-table tbody tr:hover { background: rgba(99,102,241,0.03); }
+.models-table .empty-state { padding: 28px; text-align: center; color: #6b7280; }
+
+@media (max-width: 900px) {
+  .models-table { min-width: 600px; }
+  .model-search { width: 220px; }
 }
 
 .detail-item {

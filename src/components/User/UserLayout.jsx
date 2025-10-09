@@ -12,19 +12,8 @@ import PasswordReset from '../../components/Auth/PasswordReset';
 
 // replaced with PasswordReset component
 
-const Topbar = ({ collapsed, onToggle, name }) => (
-  <div className="kt-topbar">
-    <button className="kt-burger" onClick={onToggle} aria-label="Toggle Sidebar">
-      {collapsed ? '☰' : '✕'}
-    </button>
-    <div className="kt-title">{name || 'User'}</div>
-    <div style={{flex:1}}></div>
-    <div className="kt-user">
-      <div className="kt-avatar">{name?.[0]?.toUpperCase() || 'U'}</div>
-      <div className="kt-username">{name || 'User'}</div>
-    </div>
-  </div>
-);
+// Topbar removed per UI simplification request. Keep the component so callers remain valid.
+const Topbar = () => null;
 
 const UserShell = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -49,7 +38,7 @@ const UserShell = () => {
     <div className="kt-app">
       <UserSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       <div className="kt-main">
-        <Topbar collapsed={sidebarCollapsed} onToggle={toggleSidebar} name={user?.name} />
+        <Topbar />
         <div className="kt-content">
           <Routes>
             <Route path="/" element={<UserDashboard />} />
