@@ -383,12 +383,8 @@ export function Interface({
             )}
           </div>
         </div>
-        <div className="toolbar-right">
-          {userName && <span className="user-label" title={userName}>{userName}</span>}
-          {onLogout && (
-            <button className="toolbar-logout" onClick={onLogout} title="Logout">Logout</button>
-          )}
-        </div>
+        {/* Right side intentionally left empty per request (no username/logout) */}
+        <div className="toolbar-right" />
       </div>
     );
 
@@ -431,12 +427,8 @@ export function Interface({
             )}
           </div>
         </div>
-        <div className="toolbar-right">
-          {userName && <span className="user-label" title={userName}>{userName}</span>}
-          {onLogout && (
-            <button className="toolbar-logout" onClick={onLogout} title="Logout">Logout</button>
-          )}
-        </div>
+        {/* Right side intentionally left empty per request (no username/logout) */}
+        <div className="toolbar-right" />
       </div>
     );
 
@@ -479,12 +471,8 @@ export function Interface({
             )}
           </div>
         </div>
-        <div className="toolbar-right">
-          {userName && <span className="user-label" title={userName}>{userName}</span>}
-          {onLogout && (
-            <button className="toolbar-logout" onClick={onLogout} title="Logout">Logout</button>
-          )}
-        </div>
+        {/* Right side intentionally left empty per request (no username/logout) */}
+        <div className="toolbar-right" />
       </div>
       
       <div className="widgets-container">
@@ -522,24 +510,7 @@ export function Interface({
         </div>
       )}
 
-      {/* Model Info */}
-  <div className="widget-container">
-        <h4 className="widget-title">📋 Model Information</h4>
-        <div className="model-info">
-          <div className="info-item">
-            <span className="info-label">Model:</span>
-              <span className="info-value">{selectedModel} {models[selectedModel]?.section ? <span className="section-badge">{models[selectedModel].section}</span> : null}</span>
-          </div>
-          <div className="info-item">
-            <span className="info-label">Widgets:</span>
-            <span className="info-value">{widgets.length}</span>
-          </div>
-          <div className="info-item">
-            <span className="info-label">Interactive Groups:</span>
-            <span className="info-value">{config.interactionGroups?.length || config.metadata?.interactionGroups?.length || 0}</span>
-          </div>
-        </div>
-      </div>
+      {/* Model Information widget removed per request */}
 
       {/* Save Configuration Modal */}
       <SaveConfigModal

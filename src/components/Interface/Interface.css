@@ -68,6 +68,11 @@
   max-width: 95vw;
   padding: 8px 8px 12px 8px;
   box-sizing: border-box;
+  /* Make this pane the scrollable area. Use --interface-offset to leave space for headers/footers */
+  /* tweak this value to reduce interface height */
+  height: 100%;
+  min-height: 0;
+  max-height: calc(100% - var(--interface-offset));
   overflow-y: auto;
 }
 
@@ -420,6 +425,7 @@
   grid-auto-rows: var(--widget-h);
   gap: 12px;
   align-items: start;
+
 }
 
 /* Each widget card occupies one grid cell with fixed dimensions; content can scroll inside */
@@ -759,40 +765,7 @@ input:checked + .slider:before {
   border: 1px solid #e5e7eb !important;
 }
 
-/* Model Information Styles */
-.model-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.info-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: #f8fafc;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-}
-
-.info-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.info-value {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1e293b;
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
+/* Model Information widget removed; related styles dropped */
 
 /* Interface Container */
 .interface-container {

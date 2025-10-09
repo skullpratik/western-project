@@ -342,7 +342,10 @@ const UserManagement = () => {
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     setCreateSuccess('');
-    const errs = validateCreateForm(newUser);
+    // Force non-superadmin creators to only create 'user' role accounts
+    const payload = { ...newUser };
+    if (!isSuperAdmin) payload.role = 'user';
+    const errs = validateCreateForm(payload);
     setCreateErrors(errs);
     if (Object.keys(errs).length > 0) return;
     setCreating(true);
@@ -354,7 +357,7 @@ const UserManagement = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(newUser)
+        body: JSON.stringify(payload)
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
@@ -430,7 +433,16 @@ const UserManagement = () => {
             {/* Active/inactive removed */}
           </div>
           <div>
-            <button className="kt-btn primary" onClick={() => setShowCreateModal(true)}>Create User</button>
+            <button
+              className="kt-btn primary"
+              onClick={() => {
+                // Ensure non-superadmin cannot pre-select admin role when opening the modal
+                if (!isSuperAdmin) setNewUser(prev => ({ ...prev, role: 'user' }));
+                setShowCreateModal(true);
+              }}
+            >
+              Create User
+            </button>
           </div>
         </div>
       </div>
@@ -891,10 +903,14 @@ const UserManagement = () => {
 
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
                 <label style={{fontSize:12, fontWeight:600}}>Role</label>
-                <select value={newUser.role} onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value }))}>
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
+                {isSuperAdmin ? (
+                  <select value={newUser.role} onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value }))}>
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                ) : (
+                  <div style={{padding:'6px 10px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6}}>User</div>
+                )}
                 <div style={{marginLeft:'auto'}}>
                   {createErrors.form && <div style={{color:'var(--kt-danger)', fontSize:13, marginRight:12}}>{createErrors.form}</div>}
                   {createSuccess && <div style={{color:'var(--kt-success)', fontSize:13, marginRight:12}}>{createSuccess}</div>}

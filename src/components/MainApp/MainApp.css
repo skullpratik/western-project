@@ -1,6 +1,7 @@
 /* Main App Styles */
 .main-app {
-  height: 100vh;
+  /* Fill parent container (kt-content) instead of forcing viewport height which creates nested scroll */
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: #000;
@@ -153,6 +154,7 @@
   height: 40px;
   border: 3px solid #f3f4f6;
   border-top: 3px solid #6366f1;
+
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -165,3 +167,16 @@
 
 /* Responsive */
 @media (max-width: 768px) { /* header removed - keep placeholder for future */ }
+
+/* Ensure the canvas and its wrapper don't force the page to grow: allow proper flex shrink */
+.app-content, .canvas-container, .interface-container {
+  min-height: 0;
+  height: 100%;
+}
+
+/* Make the underlying canvas element fill its container so it doesn't add extra height */
+.canvas-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}

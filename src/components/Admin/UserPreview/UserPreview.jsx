@@ -328,19 +328,6 @@ function UserPreview() {
 
   return (
     <div className="user-preview">
-      <div className="preview-header">
-        <div className="preview-indicator">
-          <span className="preview-badge">👁️ Admin Preview</span>
-          <span className="preview-description">This is what users see with full permissions</span>
-          <button 
-            onClick={() => navigate('/admin/dashboard')} 
-            style={{marginLeft: 'auto', padding: '4px 8px', backgroundColor: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer'}}
-          >
-            🏠 Back to Dashboard
-          </button>
-        </div>
-      </div>
-      
       <div className="main-app">
         <div className="app-content">
           <div className="canvas-container">

@@ -191,16 +191,18 @@ body.admin-mode { font-family: var(--kt-font-family); background: var(--kt-bg); 
 .kt-sidebar.collapsed .kt-user-details, .kt-sidebar.collapsed .kt-logout span { display:none; }
 
 /* Content Area - STRICT HEIGHT CONTROL */
-.kt-content { 
-  flex:1; 
-  padding:12px; 
-  display:flex; 
-  flex-direction:column; 
-  gap:12px; 
-  background:var(--kt-bg); 
-  overflow-y:auto; 
-  height:calc(100vh - 40px);
-  max-height:calc(100vh - 40px);
+.kt-content {
+  flex: 1;
+  /* remove extra padding so content uses full space */
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--kt-bg);
+  /* Prevent this container from having its own scrollbar; embedded app panes should manage scrolling */
+  overflow: hidden;
+  /* Allow flex children to shrink correctly inside the layout */
+  min-height: 0;
 }
 
 /* Cards - MINIMAL PADDING */
@@ -401,7 +403,7 @@ body.dark-mode .kt-toast { background:var(--kt-surface); }
     height:36px;
   } 
   .kt-content { 
-    padding:6px; 
+    padding:0;
     gap:6px;
     height:calc(100vh - 36px);
     max-height:calc(100vh - 36px);
@@ -433,7 +435,7 @@ body.dark-mode .kt-toast { background:var(--kt-surface); }
   .kt-topbar { height:32px; padding:0 6px; } 
   .kt-card { padding:4px 6px; gap:2px; } 
   .kt-content { 
-    padding:4px; 
+    padding:0;
     gap:4px;
     height:calc(100vh - 32px);
     max-height:calc(100vh - 32px);

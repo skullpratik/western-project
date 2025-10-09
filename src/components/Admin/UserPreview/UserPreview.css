@@ -10,41 +10,7 @@
   z-index: 1; /* Lower than admin navigation */
 }
 
-.preview-header {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: white;
-  padding: 8px 16px;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  z-index: 2;
-  flex-shrink: 0;
-}
-
-.preview-indicator {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.preview-badge {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 4px 8px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 600;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.preview-description {
-  font-size: 12px;
-  opacity: 0.9;
-  font-weight: 500;
-}
+/* preview header removed - styles dropped */
 
 /* Main App Styles - Adapted for admin layout */
 .user-preview .main-app {
